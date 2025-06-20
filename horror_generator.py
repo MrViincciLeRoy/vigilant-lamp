@@ -62,7 +62,7 @@ class KetchumStyleHorrorGenerator:
             # ACT 1: The Setup
             {"scene": 1, "title": "The Inciting Incident", "description": f"The story opens with the discovery of a shocking crime related to '{crime}'. We meet {protagonist} as they are drawn into the case, immediately establishing the grim tone and the killer's brutal methods.", "target_words": 400, "focus": "character_introduction"},
             {"scene": 2, "title": "The Investigation Begins", "description": f"As {protagonist} starts investigating, the scale of the horror becomes clear. A second victim or discovery confirms a serial pattern, introducing the killer's '{signature}' and mounting pressure from media and superiors in {setting}.", "target_words": 400, "focus": "investigation_begins"},
-            {"scene": 3, "title": "A Glimmer of a Lead", "description": f"The investigation uncovers the first tangible connection between the victims—a shared secret, a past event, or a common affiliation. This clue opens up the first real avenue of investigation but also hints at a deeper, more complex motive.", "target_words": 400, "focus": "clues_and_escalation"},
+            {"scene": 3, "title": "A Glimmer of a Lead", "description": f"The investigation uncovers the first tangible connection between the victims--a shared secret, a past event, or a common affiliation. This clue opens up the first real avenue of investigation but also hints at a deeper, more complex motive.", "target_words": 400, "focus": "clues_and_escalation"},
 
             # ACT 2: The Confrontation
             {"scene": 4, "title": "The First Obstacle", "description": "A promising lead turns into a dead end or a red herring, wasting precious time and increasing the protagonist's frustration. This obstacle highlights the challenges of the case and the cunning nature of the antagonist.", "target_words": 400, "focus": "misdirection"},
@@ -106,7 +106,7 @@ class KetchumStyleHorrorGenerator:
         )
 
         context = self._build_focused_context(scene_num)
-        
+
         prompt = f"""
 You are a master horror writer, channeling the spirit of Jack Ketchum.
 Your task is to write a chapter for a brutal, realistic horror story set in Pretoria, South Africa.
@@ -138,7 +138,7 @@ INSTRUCTIONS:
                 echo=False
             )
             scene_text = self._clean_text(output['choices'][0]['text'])
-            
+
             if self._validate_scene(scene_text, target_words):
                 word_count = len(scene_text.split())
                 print(f"  ✓ Chapter {scene_num} completed ({word_count} words).")
@@ -197,7 +197,7 @@ INSTRUCTIONS:
             gc.collect() # Free up memory after each scene
 
         complete_story_text = "\n\n---\n\n".join(full_story_chapters)
-        
+
         print("\n=== Story Generation Complete ===")
         print(f"Final Word Count: {total_words} / {self.total_target_words}")
 
@@ -232,6 +232,73 @@ def save_story(story: Dict[str, any], output_dir: str = 'outputs') -> None:
         f.write(f"**Word Count:** {story['word_count']}\n\n")
         f.write(story['text'])
     print(f"Story successfully saved to: {filename}")
+
+def generate_and_save_audiobook(story: Dict[str, any], output_dir: str = 'outputs') -> None:
+    """
+    Converts the story text to a WAV audio file and saves it.
+    This function assumes the 'kokoro' library is installed and operational.
+    It processes the story chapter by chapter to manage memory usage.
+    """
+    print("\n--- Starting Audiobook Generation ---")
+    try:
+        # Based on research, Kokoro TTS can be initialized and used this way. [7, 9]
+        # This assumes you have the necessary model files ('kokoro-v0_19.onnx', 'voices.json')
+        # in the same directory or accessible path.
+        print("  - Initializing Kokoro TTS engine...")
+        tts_engine = kokoro.Kokoro("kokoro-v0_19.onnx", "voices.json")
+        print("  - TTS engine initialized.")
+
+        # Prepare the text for speech synthesis
+        full_text = story['text']
+        # 1. Split the story into chapters for individual processing.
+        # This is more robust than splitting by paragraphs alone.
+        chapters = re.split(r'## Chapter \d+: .*?\n\n', full_text)
+        chapters = [ch.strip() for ch in chapters if ch.strip() and not ch.startswith('[Error')]
+
+        if not chapters:
+            print("  ✗ No valid text content found to generate audio.")
+            return
+
+        print(f"  - Synthesizing {len(chapters)} chapters...")
+
+        audio_segments = []
+        sample_rate = 24000  # Kokoro TTS typically uses a 24000Hz sample rate
+
+        # Process each chapter and collect the audio data
+        for i, chunk in enumerate(chapters):
+            print(f"    - Processing chapter {i+1}/{len(chapters)}...")
+            # Clean up any remaining markdown for smoother speech
+            clean_chunk = chunk.replace('\n\n---\n\n', '\n\n')
+            # The create method returns a NumPy array of the audio waveform. [9]
+            wav = tts_engine.create(clean_chunk)
+            audio_segments.append(wav)
+            gc.collect()
+
+        # Concatenate all audio segments into one array
+        print("  - Concatenating audio segments...")
+        full_audio = np.concatenate(audio_segments)
+
+        # Save the final audio file using soundfile. [3, 10]
+        safe_title = re.sub(r'[^\w\s-]', '', story['title']).strip().replace(' ', '_')
+        filename = os.path.join(output_dir, f"{safe_title}_Audiobook.wav")
+
+        print(f"  - Saving audiobook to: {filename}")
+        sf.write(filename, full_audio, sample_rate)
+        print("  ✓ Audiobook generated and saved successfully.")
+
+    except NameError:
+        print("\n--- Audiobook Generation Skipped ---")
+        print("  ✗ The 'kokoro' library is not available in your environment.")
+        print("  - Please ensure it is installed and configured to enable this feature.")
+    except FileNotFoundError:
+        print("\n--- Audiobook Generation Failed ---")
+        print("  ✗ Could not find Kokoro TTS model files (e.g., 'kokoro-v0_19.onnx').")
+        print("  - Please make sure the required model files are in the script's directory.")
+    except Exception as e:
+        print(f"\n  ✗ An unexpected error occurred during audiobook generation: {e}")
+        import traceback
+        traceback.print_exc()
+
 # --- MAIN EXECUTION BLOCK ---
 if __name__ == "__main__":
     # --- STORY PROMPT ---
@@ -259,6 +326,8 @@ Signature: A single, pressed jacaranda blossom placed on the victim's eyes.
         # 4. Save the result
         if final_story and final_story['word_count'] > 0:
             save_story(final_story)
+            # 5. Generate and save the audiobook from the final story
+            generate_and_save_audiobook(final_story)
         else:
             print("Story generation resulted in empty content. Nothing to save.")
 
