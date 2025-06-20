@@ -233,71 +233,98 @@ def save_story(story: Dict[str, any], output_dir: str = 'outputs') -> None:
         f.write(story['text'])
     print(f"Story successfully saved to: {filename}")
 
-def generate_and_save_audiobook(story: Dict[str, any], output_dir: str = 'outputs') -> None:
+def generate_audio(text: str, output_file: str = 'outputs/complete_narration.wav') -> Optional[str]:
     """
+    Generate audio narration using the correct Kokoro TTS API.
     Converts the story text to a WAV audio file and saves it.
-    This function assumes the 'kokoro' library is installed and operational.
-    It processes the story chapter by chapter to manage memory usage.
     """
     print("\n--- Starting Audiobook Generation ---")
     try:
-        # Based on research, Kokoro TTS can be initialized and used this way. [7, 9]
-        # This assumes you have the necessary model files ('kokoro-v0_19.onnx', 'voices.json')
-        # in the same directory or accessible path.
-        print("  - Initializing Kokoro TTS engine...")
-        tts_engine = kokoro.Kokoro("kokoro-v0_19.onnx", "voices.json")
-        print("  - TTS engine initialized.")
-
-        # Prepare the text for speech synthesis
-        full_text = story['text']
-        # 1. Split the story into chapters for individual processing.
-        # This is more robust than splitting by paragraphs alone.
-        chapters = re.split(r'## Chapter \d+: .*?\n\n', full_text)
-        chapters = [ch.strip() for ch in chapters if ch.strip() and not ch.startswith('[Error')]
-
-        if not chapters:
-            print("  ✗ No valid text content found to generate audio.")
-            return
-
-        print(f"  - Synthesizing {len(chapters)} chapters...")
-
+        print("  - Initializing Kokoro TTS pipeline...")
+        os.makedirs('outputs', exist_ok=True)
+        
+        # Use the correct Kokoro API - KPipeline with language code
+        pipeline = kokoro.KPipeline(lang_code='a')  # 'a' for English
         audio_segments = []
-        sample_rate = 24000  # Kokoro TTS typically uses a 24000Hz sample rate
+        
+        print("  - Processing text for audio generation...")
+        
+        # Clean the text for better speech synthesis
+        # Remove markdown formatting
+        clean_text = re.sub(r'##\s*Chapter\s*\d+:\s*[^\n]+\n\n', '', text)
+        clean_text = re.sub(r'---+', '', clean_text)
+        clean_text = re.sub(r'\*\*([^*]+)\*\*', r'\1', clean_text)  # Remove bold formatting
+        clean_text = re.sub(r'\n{3,}', '\n\n', clean_text)  # Normalize line breaks
+        
+        # Split text into manageable chunks (sentences work better for TTS)
+        sentences = re.split(r'(?<=[.!?])\s+', clean_text)
+        chunk_size = 5  # Process 5 sentences at a time to manage memory
+        
+        total_chunks = len(sentences) // chunk_size + (1 if len(sentences) % chunk_size else 0)
+        print(f"  - Processing {len(sentences)} sentences in {total_chunks} chunks...")
+        
+        for i in range(0, len(sentences), chunk_size):
+            chunk = '. '.join(sentences[i:i+chunk_size])
+            if chunk.strip():
+                print(f"    - Processing chunk {i//chunk_size + 1}/{total_chunks}")
+                
+                try:
+                    # Generate audio for this chunk using the correct voice parameter
+                    generator = pipeline(chunk, voice='bm_fable')  # Using a good narrative voice
+                    
+                    # Collect audio segments from the generator
+                    for j, (gs, ps, audio) in enumerate(generator):
+                        if audio is not None and len(audio) > 0:
+                            audio_segments.append(audio)
+                            print(f"      - Collected audio segment {j+1}")
+                
+                except Exception as chunk_error:
+                    print(f"      - Warning: Error processing chunk {i//chunk_size + 1}: {chunk_error}")
+                    continue  # Skip this chunk and continue with the next
+                
+                # Clear memory after each chunk
+                gc.collect()
 
-        # Process each chapter and collect the audio data
-        for i, chunk in enumerate(chapters):
-            print(f"    - Processing chapter {i+1}/{len(chapters)}...")
-            # Clean up any remaining markdown for smoother speech
-            clean_chunk = chunk.replace('\n\n---\n\n', '\n\n')
-            # The create method returns a NumPy array of the audio waveform. [9]
-            wav = tts_engine.create(clean_chunk)
-            audio_segments.append(wav)
-            gc.collect()
-
-        # Concatenate all audio segments into one array
-        print("  - Concatenating audio segments...")
-        full_audio = np.concatenate(audio_segments)
-
-        # Save the final audio file using soundfile. [3, 10]
-        safe_title = re.sub(r'[^\w\s-]', '', story['title']).strip().replace(' ', '_')
-        filename = os.path.join(output_dir, f"{safe_title}_Audiobook.wav")
-
-        print(f"  - Saving audiobook to: {filename}")
-        sf.write(filename, full_audio, sample_rate)
-        print("  ✓ Audiobook generated and saved successfully.")
-
-    except NameError:
+        if audio_segments:
+            print("  - Concatenating audio segments...")
+            combined_audio = np.concatenate(audio_segments, axis=0)
+            
+            # Save the final audio file
+            print(f"  - Saving audiobook to: {output_file}")
+            sf.write(output_file, combined_audio, 24000)  # Kokoro typically uses 24kHz
+            
+            duration = len(combined_audio) / 24000
+            print(f"  ✓ Audiobook generated successfully!")
+            print(f"    - File: {output_file}")
+            print(f"    - Duration: {duration:.2f} seconds ({duration/60:.1f} minutes)")
+            return output_file
+        else:
+            print("  ✗ No audio segments were generated successfully.")
+            return None
+            
+    except ImportError:
         print("\n--- Audiobook Generation Skipped ---")
         print("  ✗ The 'kokoro' library is not available in your environment.")
         print("  - Please ensure it is installed and configured to enable this feature.")
-    except FileNotFoundError:
-        print("\n--- Audiobook Generation Failed ---")
-        print("  ✗ Could not find Kokoro TTS model files (e.g., 'kokoro-v0_19.onnx').")
-        print("  - Please make sure the required model files are in the script's directory.")
+        return None
     except Exception as e:
         print(f"\n  ✗ An unexpected error occurred during audiobook generation: {e}")
         import traceback
         traceback.print_exc()
+        return None
+
+def generate_and_save_audiobook(story: Dict[str, any], output_dir: str = 'outputs') -> None:
+    """
+    Wrapper function to generate audiobook with proper file naming.
+    """
+    safe_title = re.sub(r'[^\w\s-]', '', story['title']).strip().replace(' ', '_')
+    output_file = os.path.join(output_dir, f"{safe_title}_Audiobook.wav")
+    
+    result = generate_audio(story['text'], output_file)
+    if result:
+        print(f"  ✓ Audiobook saved as: {result}")
+    else:
+        print("  ✗ Audiobook generation failed.")
 
 # --- MAIN EXECUTION BLOCK ---
 if __name__ == "__main__":
