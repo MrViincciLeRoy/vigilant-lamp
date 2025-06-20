@@ -508,7 +508,7 @@ if __name__ == "__main__":
     jack_ketchum_story_outline = """
 # The Soshanguve Stalker  
 ## Story Outline  
-Pretoria, present day. The community of Soshanguve is paralyzed with fear after a string of horrifying attacks on young women. Over the course of several months, multiple victims are abducted, assaulted, and left for dead in isolated areas. Each attack follows the same disturbing pattern: the victims are found with their hands bound and a crude, hand-carved message scrawled into the ground nearby—**"Forgive me."**  
+Pretoria, present day. The community of Soshanguve is paralyzed with fear after a string of horrifying attacks on young women. Over the course of several months, multiple victims are abducted, assaulted, and left for dead in isolated areas. Each attack follows the same disturbing pattern: the victims are found with their hands bound and a crude, hand-carved message scrawled into the ground nearby**"Forgive me."**  
 
 Detective Lerato Phiri, a rising star in the police force, is assigned to the case after public outcry about the lack of progress. The media labels the perpetrator "The Soshanguve Stalker," stoking panic in an already-frightened community. Despite her determination, Lerato struggles to make headway as the perpetrator leaves no forensic evidence behind.  
 
@@ -519,13 +519,13 @@ The investigation takes a shocking turn when Lerato discovers that the stalker i
 The horror lies not just in the stalker’s sadistic methods but in the systemic injustice that allowed the original crimes to go unpunished, leaving the survivors vulnerable to further violence.  
 
 ## Key Characters  
-- **Detective Lerato Phiri:** Early 30s, fiercely independent and driven by a strong sense of justice. She is determined to prove herself in a male-dominated field while struggling with the emotional toll of investigating such brutal crimes.  
-- **The Soshanguve Stalker:** A fanatical supporter of the disgraced pastor, whose twisted sense of morality drives them to commit the heinous attacks.  
-- **Nomvula Mokoena:** A survivor of the pastor’s abuse and an outspoken activist. She becomes Lerato’s key ally, but her own safety is at constant risk as the stalker escalates their attacks.  
+**Detective Lerato Phiri:** Early 30s, fiercely independent and driven by a strong sense of justice. She is determined to prove herself in a male-dominated field while struggling with the emotional toll of investigating such brutal crimes.  
+**The Soshanguve Stalker:** A fanatical supporter of the disgraced pastor, whose twisted sense of morality drives them to commit the heinous attacks.  
+**Nomvula Mokoena:** A survivor of the pastor’s abuse and an outspoken activist. She becomes Lerato’s key ally, but her own safety is at constant risk as the stalker escalates their attacks.  
 
 ## Setting  
-- **Soshanguve, Pretoria:** The story is set in the densely populated township of Soshanguve, where poverty and crime create a tense and volatile backdrop. The stark contrast between the community’s faith-driven culture and the dark secrets lurking beneath adds to the story’s unsettling atmosphere.  
-- **Time Period:** Present day, with the central crimes reflecting the real-life struggles of survivors seeking justice in a system that often fails them.  
-""".replace("-", "") 
+**Soshanguve, Pretoria:** The story is set in the densely populated township of Soshanguve, where poverty and crime create a tense and volatile backdrop. The stark contrast between the community’s faith-driven culture and the dark secrets lurking beneath adds to the story’s unsettling atmosphere.  
+ **Time Period:** Present day, with the central crimes reflecting the real-life struggles of survivors seeking justice in a system that often fails them.  
+"""
 
     main(jack_ketchum_story_outline)
