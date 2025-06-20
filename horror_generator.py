@@ -10,65 +10,60 @@ import kokoro
 import soundfile as sf
 import numpy as np
 import requests
+# !pip install llama-cpp-python
+
+from llama_cpp import Llama
+
+llm = Llama.from_pretrained(
+	repo_id="DavidAU/L3-Dark-Planet-8B-GGUF",
+	filename="L3-Dark-Planet-8B-D_AU-IQ4_XS.gguf",
+)
 
 class OptimizedHorrorGenerator:
     def __init__(self):
-        self.llm = None
-        self.model_loaded = False
-
-    def load_model_optimized(self):
-        """Load model with CPU optimization"""
-        if self.model_loaded:
-            return
-
-        print("Loading model with CPU optimization...")
-        model_repo = "TheBloke/Llama-2-7B-Chat-GGUF"
-        model_filename = "llama-2-7b-chat.Q2_K.gguf"
-        model_path = hf_hub_download(repo_id=model_repo, filename=model_filename)
-
-        self.llm = Llama(
-            model_path=model_path,
-            n_gpu_layers=0,  # CPU only
-            n_ctx=4096,
-            n_batch=512,
-            n_threads=4,
-            f16_kv=True,
-            use_mmap=True,
-            use_mlock=False,
-            verbose=False
-        )
+        self.llm = llm  # Use the globally defined model
         self.model_loaded = True
-        print("Model loaded successfully!")
 
     def generate_chapter(self, episode_data: Dict[str, str], chapter_num: int, prev_context: str,
-                        max_tokens: int = 600, temperature: float = 0.75, top_p: float = 0.9,
-                        repeat_penalty: float = 1.05) -> str:
-        """Generate a single chapter"""
+                        max_tokens: int = 2000, temperature: float = 0.8, top_p: float = 0.95,
+                        repeat_penalty: float = 1.1) -> str:
+        """Generate a single chapter with vivid, emotional storytelling"""
         if not self.model_loaded:
-            self.load_model_optimized()
+            raise ValueError("Model not loaded")
 
-        # Preprocess strings to escape double quotes
+        # Preprocess strings to escape double quotes for safe f-string usage
         title = episode_data['title'].replace('"', '""')
         outline = episode_data['outline'].replace('"', '""')
-        context_snippet = prev_context[-200:].replace('"', '""')
+        context_snippet = prev_context[-300:].replace('"', '""')
 
+        # Craft prompt with storytelling instructions
         if chapter_num == 1:
             segment_prompt = f"""# Chapter {chapter_num}: Opening of "{title}"
 
-Write the opening chapter of "{title}" in Jack Ketchum's horror style. Focus on psychological terror, vivid imagery, and a disturbing atmosphere. Introduce key characters and the setting based on the outline:
+Write the opening chapter of "{title}" in the visceral, psychological horror style of Jack Ketchum. Create a vivid, emotional journey with:
+- 50% dialogue that reveals character motivations and subtext
+- 25% narration rich with sensory details (sight, sound, smell, touch, taste)
+- 15% body language to show tension and fear
+- 10% inner thoughts to deepen emotional impact
+Use the outline below to introduce key characters and the setting, building a disturbing atmosphere:
 
 {outline}
 
-Begin with a chilling atmosphere and character introductions, setting the stage for the horror to unfold:
+Start with a chilling scene that immerses the reader in psychological terror. Focus on imagery, emotional verbs, and sensory details to place the reader in the story. Aim for 1,000–2,000 words.
 """
         else:
             segment_prompt = f"""# Chapter {chapter_num}: Continuation of "{title}"
 
-Continue "{title}" in Jack Ketchum's horror style. Focus on escalating psychological terror, vivid imagery, and a disturbing atmosphere. Build on the previous chapter:
+Continue "{title}" in Jack Ketchum's visceral, psychological horror style. Maintain:
+- 50% dialogue with subtext and character voice
+- 25% narration with sensory-rich imagery
+- 15% body language showing escalating tension
+- 10% inner thoughts for emotional depth
+Build on the previous chapter:
 
 Previous: ...{context_snippet}
 
-Advance the plot with new developments, intensifying the horror, and maintain narrative continuity:
+Advance the plot with new horrors, deepening the psychological terror. Use vivid verbs, sensory details, and emotional imagery to sustain a disturbing atmosphere. Aim for 1,000–2,000 words.
 """
 
         print(f"Generating Chapter {chapter_num}...")
@@ -81,14 +76,14 @@ Advance the plot with new developments, intensifying the horror, and maintain na
             stop=["###", "---"],
             echo=False
         )
-        return output['choices'][0]['text'].strip()
+        chapter_text = output['choices'][0]['text'].strip()
+        word_count = len(chapter_text.split())
+        print(f"Chapter {chapter_num} generated with {word_count} words")
+        return chapter_text
 
-    def generate_series(self, episode_data: Dict[str, str], num_chapters: int = 5,
-                       tokens_per_chapter: int = 600) -> Dict[str, str]:
+    def generate_series(self, episode_data: Dict[str, str], num_chapters: int = 12,
+                       tokens_per_chapter: int = 2000) -> Dict[str, str]:
         """Generate a multi-chapter horror series"""
-        if not self.model_loaded:
-            self.load_model_optimized()
-
         chapters = []
         prev_context = ""
 
@@ -180,7 +175,7 @@ The story closes as the boyfriend turns state witness, confessing everything. Me
     episode_data = extract_episode_outline(markdown_text)
 
     print("=== SERIES GENERATION ===")
-    series = generator.generate_series(episode_data, num_chapters=5, tokens_per_chapter=600)
+    series = generator.generate_series(episode_data, num_chapters=12, tokens_per_chapter=2000)
     save_episode(series)
 
     print("\n=== AUDIO GENERATION ===")
