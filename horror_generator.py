@@ -167,7 +167,7 @@ class GenericHorrorGenerator:
             "climax": "Bring all elements together in confrontation. Focus on action and revelation.",
             "resolution": "Show consequences and aftermath. Avoid tying up loose ends too neatly."
         }
-        
+
         if scene_num == 1:
             prompt = f"""You are writing a brutal, realistic horror story in the style of Jack Ketchum. Write the opening scene with visceral impact and psychological depth.
 
@@ -476,27 +476,7 @@ def main(story_outline_str: str):
                 print(f"Story: {story['title']}")
                 print(f"Final word count: {story['word_count']}")
                 print(f"Scenes completed: {story['scenes_completed']}")
-        else:# The Soshanguve Stalker  
-
-## Story Outline  
-Pretoria, present day. The community of Soshanguve is paralyzed with fear after a string of horrifying attacks on young women. Over the course of several months, multiple victims are abducted, assaulted, and left for dead in isolated areas. Each attack follows the same disturbing pattern: the victims are found with their hands bound and a crude, hand-carved message scrawled into the ground nearby—**"Forgive me."**  
-
-Detective Lerato Phiri, a rising star in the police force, is assigned to the case after public outcry about the lack of progress. The media labels the perpetrator "The Soshanguve Stalker," stoking panic in an already-frightened community. Despite her determination, Lerato struggles to make headway as the perpetrator leaves no forensic evidence behind.  
-
-As Lerato investigates, she uncovers a deeply disturbing connection between the victims: they were all involved in exposing a powerful local pastor, a man who was accused of sexual abuse and financial corruption but never faced justice due to community support and bribed law enforcement. The women had banded together as part of a survivors' group but had been forced underground after receiving threats.  
-
-The investigation takes a shocking turn when Lerato discovers that the stalker is not connected to the pastor but is, in fact, one of his most ardent followers—a man who sees himself as an "avenging angel" sent to silence the women for tarnishing the pastor's name. Lerato finds herself racing against time to stop the stalker and expose the pastor’s crimes, all while navigating the dangerous political and social tensions in the community.  
-
-The horror lies not just in the stalker’s sadistic methods but in the systemic injustice that allowed the original crimes to go unpunished, leaving the survivors vulnerable to further violence.  
-
-## Key Characters  
-- **Detective Lerato Phiri:** Early 30s, fiercely independent and driven by a strong sense of justice. She is determined to prove herself in a male-dominated field while struggling with the emotional toll of investigating such brutal crimes.  
-- **The Soshanguve Stalker:** A fanatical supporter of the disgraced pastor, whose twisted sense of morality drives them to commit the heinous attacks.  
-- **Nomvula Mokoena:** A survivor of the pastor’s abuse and an outspoken activist. She becomes Lerato’s key ally, but her own safety is at constant risk as the stalker escalates their attacks.  
-
-## Setting  
-- **Soshanguve, Pretoria:** The story is set in the densely populated township of Soshanguve, where poverty and crime create a tense and volatile backdrop. The stark contrast between the community’s faith-driven culture and the dark secrets lurking beneath adds to the story’s unsettling atmosphere.  
-- **Time Period:** Present day, with the central crimes reflecting the real-life struggles of survivors seeking justice in a system that often fails them.  
+        else:
             print("\nERROR: Failed to generate a story with any content.")
     except Exception as e:
         print(f"\nFATAL ERROR: {e}")
@@ -508,13 +488,13 @@ if __name__ == "__main__":
     jack_ketchum_story_outline = """
 # The Soshanguve Stalker  
 ## Story Outline  
-Pretoria, present day. The community of Soshanguve is paralyzed with fear after a string of horrifying attacks on young women. Over the course of several months, multiple victims are abducted, assaulted, and left for dead in isolated areas. Each attack follows the same disturbing pattern: the victims are found with their hands bound and a crude, hand-carved message scrawled into the ground nearby**"Forgive me."**  
+Pretoria, present day. The community of Soshanguve is paralyzed with fear after a string of horrifying attacks on young women. Over the course of several months, multiple victims are abducted, assaulted, and left for dead in isolated areas. Each attack follows the same disturbing pattern: the victims are found with their hands bound and a crude, hand-carved message scrawled into the ground nearby--**"Forgive me."**  
 
 Detective Lerato Phiri, a rising star in the police force, is assigned to the case after public outcry about the lack of progress. The media labels the perpetrator "The Soshanguve Stalker," stoking panic in an already-frightened community. Despite her determination, Lerato struggles to make headway as the perpetrator leaves no forensic evidence behind.  
 
 As Lerato investigates, she uncovers a deeply disturbing connection between the victims: they were all involved in exposing a powerful local pastor, a man who was accused of sexual abuse and financial corruption but never faced justice due to community support and bribed law enforcement. The women had banded together as part of a survivors' group but had been forced underground after receiving threats.  
 
-The investigation takes a shocking turn when Lerato discovers that the stalker is not connected to the pastor but is, in fact, one of his most ardent followers—a man who sees himself as an "avenging angel" sent to silence the women for tarnishing the pastor's name. Lerato finds herself racing against time to stop the stalker and expose the pastor’s crimes, all while navigating the dangerous political and social tensions in the community.  
+The investigation takes a shocking turn when Lerato discovers that the stalker is not connected to the pastor but is, in fact, one of his most ardent followers--a man who sees himself as an "avenging angel" sent to silence the women for tarnishing the pastor's name. Lerato finds herself racing against time to stop the stalker and expose the pastor’s crimes, all while navigating the dangerous political and social tensions in the community.  
 
 The horror lies not just in the stalker’s sadistic methods but in the systemic injustice that allowed the original crimes to go unpunished, leaving the survivors vulnerable to further violence.  
 
@@ -525,7 +505,6 @@ The horror lies not just in the stalker’s sadistic methods but in the systemic
 
 ## Setting  
 **Soshanguve, Pretoria:** The story is set in the densely populated township of Soshanguve, where poverty and crime create a tense and volatile backdrop. The stark contrast between the community’s faith-driven culture and the dark secrets lurking beneath adds to the story’s unsettling atmosphere.  
- **Time Period:** Present day, with the central crimes reflecting the real-life struggles of survivors seeking justice in a system that often fails them.  
+**Time Period:** Present day, with the central crimes reflecting the real-life struggles of survivors seeking justice in a system that often fails them.
 """
-
     main(jack_ketchum_story_outline)
