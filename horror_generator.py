@@ -12,7 +12,6 @@ import numpy as np
 import requests
 import re
 import json
-import argparse
 from pathlib import Path
 
 # Initialize the model with optimized settings
@@ -43,135 +42,67 @@ class GenericHorrorGenerator:
         
     def create_story_structure(self, story_data: Dict[str, str]) -> List[Dict[str, str]]:
         """Create a detailed story structure with scenes and plot points based on the story outline"""
-        # Extract key information from the story outline
         outline = story_data.get('outline', '')
         title = story_data.get('title', 'Untitled Horror Story')
-        
-        # Parse the outline to determine story structure
         scenes = self._analyze_outline_for_scenes(outline, title)
-        
-        # If we can't parse specific scenes, use a generic 7-act structure
         if len(scenes) < 5:
             scenes = self._create_generic_structure(story_data)
-        
         return scenes
     
     def _analyze_outline_for_scenes(self, outline: str, title: str) -> List[Dict[str, str]]:
         """Analyze the outline to determine natural scene breaks"""
         scenes = []
-        
-        # Look for common story structure indicators
         outline_lower = outline.lower()
-        
-        # Try to identify key story beats from the outline
-        if any(word in outline_lower for word in ['murder', 'kill', 'death', 'ritual']):
-            # Crime/horror story structure
+        if any(word in outline_lower for word in ['murder', 'kill', 'death', 'ritual', 'crime', 'unsolved']):
             scenes = [
                 {
-                    "scene": 1,
-                    "title": "The Setup",
-                    "description": "Introduce main characters and establish the normal world before darkness intrudes",
-                    "target_words": 1400,
-                    "key_elements": ["Character introduction", "Setting establishment", "Initial relationships"]
+                    "scene": 1, "title": "The Cold Case",
+                    "description": "Introduce the protagonist and their fascination with a series of unsolved crimes from Pretoria's past.",
+                    "target_words": 1400, "key_elements": ["Protagonist introduction", "Setting the scene in modern Pretoria", "Discovery of the old case"]
                 },
                 {
-                    "scene": 2,
-                    "title": "The Catalyst",
-                    "description": "The event or meeting that sets the horror in motion",
-                    "target_words": 1400,
-                    "key_elements": ["Inciting incident", "First hint of danger", "Character motivations revealed"]
+                    "scene": 2, "title": "First Dig",
+                    "description": "The protagonist begins their investigation, accessing archives and finding the first hints of a cover-up.",
+                    "target_words": 1400, "key_elements": ["Initial research", "Redacted files", "Sense of being watched"]
                 },
                 {
-                    "scene": 3,
-                    "title": "Rising Tension",
-                    "description": "Escalating conflict and growing unease among characters",
-                    "target_words": 1400,
-                    "key_elements": ["Character development", "Relationship strain", "Building suspense"]
+                    "scene": 3, "title": "A Warning",
+                    "description": "The protagonist receives a direct or indirect threat, making them realize the danger is real and present.",
+                    "target_words": 1400, "key_elements": ["A veiled threat", "Escalating paranoia", "Contact with a reluctant source"]
                 },
                 {
-                    "scene": 4,
-                    "title": "The Point of No Return",
-                    "description": "Characters make crucial decisions that seal their fate",
-                    "target_words": 1400,
-                    "key_elements": ["Major plot development", "Character choices", "Moral conflict"]
+                    "scene": 4, "title": "The Point of No Return",
+                    "description": "A crucial piece of evidence is uncovered, but it puts the protagonist directly in the killer's sights.",
+                    "target_words": 1400, "key_elements": ["Major breakthrough", "Direct confrontation or narrow escape", "Moral dilemma"]
                 },
                 {
-                    "scene": 5,
-                    "title": "The Descent",
-                    "description": "Characters move toward their doom, tension reaches breaking point",
-                    "target_words": 1400,
-                    "key_elements": ["Final preparations", "Last chances", "Dramatic irony"]
+                    "scene": 5, "title": "The Hunter and The Hunted",
+                    "description": "Paranoia turns to terror as the protagonist realizes they are being actively hunted by the shadowy figure from the past.",
+                    "target_words": 1400, "key_elements": ["Intensifying pursuit", "Isolation of the protagonist", "Desperate measures for survival"]
                 },
                 {
-                    "scene": 6,
-                    "title": "The Horror Unleashed",
-                    "description": "The climactic horror scene where the worst happens",
-                    "target_words": 1400,
-                    "key_elements": ["Climax", "Horror peak", "Character fates sealed"]
+                    "scene": 6, "title": "The Ghost of Pretoria",
+                    "description": "The climax where the protagonist confronts the killer and the horrifying truth of the original crimes is revealed.",
+                    "target_words": 1400, "key_elements": ["Climactic confrontation", "Killer's identity and motive revealed", "Life-or-death struggle"]
                 },
                 {
-                    "scene": 7,
-                    "title": "Aftermath and Resolution",
-                    "description": "The consequences unfold and justice or closure is achieved",
-                    "target_words": 1600,
-                    "key_elements": ["Resolution", "Consequences", "Final justice"]
+                    "scene": 7, "title": "Jacaranda Scars",
+                    "description": "The aftermath, showing the psychological and physical scars left on the protagonist and the resolution of the case.",
+                    "target_words": 1600, "key_elements": ["Resolution of the main conflict", "Lingering consequences", "A somber sense of justice"]
                 }
             ]
-        
         return scenes
     
     def _create_generic_structure(self, story_data: Dict[str, str]) -> List[Dict[str, str]]:
         """Create a generic horror story structure when outline analysis fails"""
         return [
-            {
-                "scene": 1,
-                "title": "The Beginning",
-                "description": "Establish characters, setting, and the world before horror intrudes",
-                "target_words": 1400,
-                "key_elements": ["Character introduction", "Setting", "Normal world"]
-            },
-            {
-                "scene": 2,
-                "title": "First Shadows",
-                "description": "Something dark enters the story, first hints of the horror to come",
-                "target_words": 1400,
-                "key_elements": ["Inciting incident", "First supernatural/horror element", "Character reactions"]
-            },
-            {
-                "scene": 3,
-                "title": "Growing Darkness",
-                "description": "The horror elements strengthen, characters begin to change",
-                "target_words": 1400,
-                "key_elements": ["Horror escalation", "Character development", "Building tension"]
-            },
-            {
-                "scene": 4,
-                "title": "The Turning Point",
-                "description": "A crucial moment that changes everything for the characters",
-                "target_words": 1400,
-                "key_elements": ["Major plot twist", "Character revelations", "Point of no return"]
-            },
-            {
-                "scene": 5,
-                "title": "Into the Abyss",
-                "description": "Characters descend deeper into horror, hope begins to fade",
-                "target_words": 1400,
-                "key_elements": ["Desperation", "Horror intensifies", "Character struggles"]
-            },
-            {
-                "scene": 6,
-                "title": "The Heart of Darkness",
-                "description": "The climactic horror scene, the darkest moment of the story",
-                "target_words": 1400,
-                "key_elements": ["Climax", "Ultimate horror", "Character fates"]
-            },
-            {
-                "scene": 7,
-                "title": "What Remains",
-                "description": "The aftermath, consequences, and any resolution or closure",
-                "target_words": 1600,
-                "key_elements": ["Resolution", "Aftermath", "Final thoughts"]
-            }
+            {"scene": 1, "title": "The Beginning", "description": "Establish characters, setting, and the world before horror intrudes.", "target_words": 1400, "key_elements": ["Character introduction", "Setting", "Normal world"]},
+            {"scene": 2, "title": "First Shadows", "description": "Something dark enters the story, first hints of the horror to come.", "target_words": 1400, "key_elements": ["Inciting incident", "First supernatural/horror element", "Character reactions"]},
+            {"scene": 3, "title": "Growing Darkness", "description": "The horror elements strengthen, characters begin to change.", "target_words": 1400, "key_elements": ["Horror escalation", "Character development", "Building tension"]},
+            {"scene": 4, "title": "The Turning Point", "description": "A crucial moment that changes everything for the characters.", "target_words": 1400, "key_elements": ["Major plot twist", "Character revelations", "Point of no return"]},
+            {"scene": 5, "title": "Into the Abyss", "description": "Characters descend deeper into horror, hope begins to fade.", "target_words": 1400, "key_elements": ["Desperation", "Horror intensifies", "Character struggles"]},
+            {"scene": 6, "title": "The Heart of Darkness", "description": "The climactic horror scene, the darkest moment of the story.", "target_words": 1400, "key_elements": ["Climax", "Ultimate horror", "Character fates"]},
+            {"scene": 7, "title": "What Remains", "description": "The aftermath, consequences, and any resolution or closure.", "target_words": 1600, "key_elements": ["Resolution", "Aftermath", "Final thoughts"]}
         ]
 
     def generate_scene(self, scene_data: Dict[str, str], story_structure: List[Dict], 
@@ -185,16 +116,13 @@ class GenericHorrorGenerator:
         description = scene_data["description"]
         target_words = scene_data["target_words"]
         key_elements = scene_data["key_elements"]
-
-        # Build comprehensive context from previous scenes
-        context_length = min(6000, len(self.story_context))  # Use substantial context
+        context_length = min(6000, len(self.story_context))
         recent_context = self.story_context[-context_length:] if self.story_context else ""
         
-        # Create scene-specific instructions
         if scene_num == 1:
-            prompt = f"""Write the opening scene of a psychological horror story.
+            prompt = f"""Write the opening scene of a psychological true-crime horror story set in Pretoria, South Africa.
 
-STORY CONTEXT:
+STORY OUTLINE:
 {story_context}
 
 SCENE: {title}
@@ -203,22 +131,18 @@ TARGET LENGTH: {target_words} words
 KEY ELEMENTS TO INCLUDE: {', '.join(key_elements)}
 
 WRITING REQUIREMENTS:
-- Write in third person with rich character perspectives
-- Use rich sensory details and atmospheric descriptions
-- Build psychological tension through character interactions
-- Show character motivations through actions and dialogue
-- Maintain a dark, foreboding tone throughout
-- Create vivid, cinematic scenes
-- Write exactly {target_words} words
-- Establish the setting and characters based on the story context provided
+- Write in third person with a rich character perspective.
+- Use rich sensory details and atmospheric descriptions of Pretoria.
+- Build psychological tension through character thoughts and observations.
+- Show character motivations through actions.
+- Maintain a dark, foreboding, and realistic tone.
+- Write exactly {target_words} words.
 
 Begin the story:"""
-
         else:
-            # Continuation scenes with full context
-            prompt = f"""Continue this psychological horror story.
+            prompt = f"""Continue this psychological true-crime horror story.
 
-STORY CONTEXT (for reference):
+STORY OUTLINE (for reference):
 {story_context}
 
 PREVIOUS STORY CONTENT:
@@ -230,43 +154,30 @@ TARGET LENGTH: {target_words} words
 KEY ELEMENTS TO INCLUDE: {', '.join(key_elements)}
 
 WRITING REQUIREMENTS:
-- Maintain perfect narrative continuity with previous scenes
-- Keep character voices and personalities consistent
-- Escalate psychological tension appropriately for scene {scene_num}
-- Use rich sensory details and atmospheric descriptions
-- Show rather than tell - use dialogue and action
-- Build toward the climactic scenes appropriately
-- Write exactly {target_words} words
-- End with a natural transition point for the next scene
+- Maintain perfect narrative continuity.
+- Keep character voices and personalities consistent.
+- Escalate the psychological tension and sense of danger.
+- Use rich sensory details and atmospheric descriptions.
+- Show rather than tell.
+- Write exactly {target_words} words.
+- End with a natural transition point for the next scene.
 
 Continue the story seamlessly:"""
 
         print(f"Generating Scene {scene_num}: '{title}' (target: {target_words} words)...")
-        
-        # Calculate tokens with buffer for full context usage
-        max_tokens = int(target_words * 1.8)  # Generous token allowance
-        
-        # Multiple generation attempts for quality
+        max_tokens = int(target_words * 1.8)
         best_attempt = ""
         best_word_count = 0
         
-        for attempt in range(3):  # Try up to 3 times
+        for attempt in range(3):
             try:
                 output = self.llm(
-                    prompt,
-                    max_tokens=max_tokens,
-                    temperature=temperature + (attempt * 0.05),  # Slight temperature variation
-                    top_p=top_p,
-                    repeat_penalty=1.05 + (attempt * 0.02),
-                    stop=["###", "---", "THE END", "Chapter", "CHAPTER", "\n\n\n\n"],
-                    echo=False
+                    prompt, max_tokens=max_tokens, temperature=temperature + (attempt * 0.05),
+                    top_p=top_p, repeat_penalty=1.05 + (attempt * 0.02),
+                    stop=["###", "---", "THE END", "Chapter", "CHAPTER", "\n\n\n\n"], echo=False
                 )
-                
-                scene_text = output['choices'][0]['text'].strip()
-                scene_text = self._clean_and_format_text(scene_text)
+                scene_text = self._clean_and_format_text(output['choices'][0]['text'])
                 word_count = len(scene_text.split())
-                
-                # Check if this attempt is better (closer to target)
                 target_proximity = abs(word_count - target_words) / target_words
                 best_proximity = abs(best_word_count - target_words) / target_words if best_word_count > 0 else 1.0
                 
@@ -274,16 +185,12 @@ Continue the story seamlessly:"""
                     best_attempt = scene_text
                     best_word_count = word_count
                 
-                # If we hit the health threshold, use this attempt
-                health_ratio = word_count / target_words
-                if health_ratio >= self.health_threshold:
+                if word_count / target_words >= self.health_threshold:
                     best_attempt = scene_text
                     best_word_count = word_count
                     break
-                    
             except Exception as e:
                 print(f"Attempt {attempt + 1} failed: {e}")
-                continue
         
         if best_attempt:
             health_ratio = best_word_count / target_words
@@ -295,208 +202,115 @@ Continue the story seamlessly:"""
 
     def _clean_and_format_text(self, text: str) -> str:
         """Enhanced text cleaning and formatting"""
-        if not text:
-            return ""
-            
-        # Remove unwanted formatting
+        if not text: return ""
         text = re.sub(r'```.*?```', '', text, flags=re.DOTALL)
-        text = re.sub(r'\*\*\*+', '', text)
-        text = re.sub(r'---+', '', text)
-        
-        # Fix paragraph spacing
-        lines = text.split('\n')
-        cleaned_lines = []
-        for line in lines:
-            line = line.strip()
-            if line and not line.startswith('[') and not line.startswith('SCENE'):
-                cleaned_lines.append(line)
-        
-        # Join with proper paragraph breaks
-        formatted_text = '\n\n'.join(cleaned_lines)
-        
-        # Remove any remaining artifacts
-        formatted_text = re.sub(r'\n{3,}', '\n\n', formatted_text)
-        
-        return formatted_text.strip()
+        text = re.sub(r'\*\*\*+|---+', '', text)
+        lines = [line.strip() for line in text.split('\n') if line.strip() and not line.startswith('[') and not line.startswith('SCENE')]
+        formatted_text = '\n\n'.join(lines)
+        return re.sub(r'\n{3,}', '\n\n', formatted_text).strip()
 
     def generate_complete_story(self, story_data: Dict[str, str]) -> Dict[str, str]:
-        """Generate a complete cohesive horror story with improved structure"""
-        if not self.model_loaded:
-            raise ValueError("Model not loaded - cannot generate story")
+        """Generate a complete cohesive horror story from an internal outline"""
+        if not self.model_loaded: raise ValueError("Model not loaded")
         
         print(f"=== Generating Complete Horror Story: '{story_data['title']}' ===")
         print(f"Target: {self.total_target_words} words | Health Threshold: {self.health_threshold:.0%}")
         
-        # Create detailed story structure
         story_structure = self.create_story_structure(story_data)
-        
-        story_scenes = []
-        total_words = 0
-        failed_scenes = 0
+        story_scenes, total_words, failed_scenes = [], 0, 0
         
         for scene_data in story_structure:
             scene_text = self.generate_scene(scene_data, story_structure, story_data.get('outline', ''))
-            
             if scene_text and not scene_text.startswith("[Error"):
-                story_scenes.append({
-                    'title': scene_data['title'],
-                    'text': scene_text
-                })
-                
-                # Update context with new scene
+                story_scenes.append({'title': scene_data['title'], 'text': scene_text})
                 self.story_context += "\n\n" + scene_text
-                
                 scene_words = len(scene_text.split())
                 total_words += scene_words
-                
                 health_ratio = scene_words / scene_data['target_words']
                 print(f"✓ Scene {scene_data['scene']} added: {scene_words} words")
                 print(f"  Progress: {total_words}/{self.total_target_words} words ({total_words/self.total_target_words*100:.1f}%)")
                 print(f"  Scene Health: {health_ratio:.1%}")
-                
-                # Memory management
                 gc.collect()
-                
             else:
                 failed_scenes += 1
                 print(f"✗ Scene {scene_data['scene']} failed")
         
-        # Join all scenes into complete story
-        complete_story = ""
-        for i, scene in enumerate(story_scenes):
-            if i > 0:
-                complete_story += "\n\n---\n\n"
-            complete_story += scene['text']
+        complete_story = "\n\n---\n\n".join([scene['text'] for scene in story_scenes])
+        story_health = total_words / self.total_target_words if self.total_target_words > 0 else 0
         
-        # Calculate final statistics
-        story_health = total_words / self.total_target_words
+        print("\n=== Story Generation Complete ===")
+        print(f"Final word count: {total_words} words ({story_health:.1%} of target)")
         
-        print(f"\n=== Story Generation Complete ===")
-        print(f"Scenes generated: {len(story_scenes)}/{len(story_structure)}")
-        print(f"Failed scenes: {failed_scenes}")
-        print(f"Final word count: {total_words} words")
-        print(f"Target achievement: {story_health:.1%}")
-        print(f"Health status: {'✓ HEALTHY' if story_health >= self.health_threshold else '⚠ BELOW THRESHOLD'}")
-        
-        return {
-            'title': story_data['title'],
-            'text': complete_story,
-            'word_count': total_words,
-            'target_words': self.total_target_words,
-            'health_ratio': story_health,
-            'scenes_completed': len(story_scenes),
-            'scenes_failed': failed_scenes
-        }
-
-def read_markdown_file(file_path: str) -> str:
-    """Reads markdown file content"""
-    try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            return f.read()
-    except FileNotFoundError:
-        print(f"File {file_path} not found")
-        return ""
+        return {'title': story_data['title'], 'text': complete_story, 'word_count': total_words, 'target_words': self.total_target_words,
+                'health_ratio': story_health, 'scenes_completed': len(story_scenes), 'scenes_failed': failed_scenes}
 
 def extract_story_data(markdown_text: str) -> Dict[str, str]:
-    """Extract story data from markdown - now more flexible"""
+    """Extract story data from a markdown string"""
     lines = markdown_text.split('\n')
     story_title = ""
-    
-    # Look for title in various formats
     for line in lines:
         line = line.strip()
         if line.startswith('# ') and not story_title:
             story_title = line[2:].strip()
             break
-        elif line.startswith('## ') and 'title' in line.lower() and not story_title:
-            # Look for title in next line
-            idx = lines.index(line)
-            if idx + 1 < len(lines):
-                story_title = lines[idx + 1].strip()
-                break
-    
-    return {
-        'title': story_title or 'Untitled Horror Story',
-        'outline': markdown_text.strip()
-    }
+    return {'title': story_title or 'Untitled Horror Story', 'outline': markdown_text.strip()}
 
 def save_story(story: Dict[str, str], output_dir: str = 'outputs') -> Optional[str]:
     """Save complete story with enhanced metadata"""
     os.makedirs(output_dir, exist_ok=True)
-    
-    # Create filename from title
-    safe_title = re.sub(r'[^\w\s-]', '', story['title']).strip()
-    safe_title = re.sub(r'[-\s]+', '_', safe_title).lower()
+    safe_title = re.sub(r'[^\w\s-]', '', story['title']).strip().replace(' ', '_').lower()
     filename = os.path.join(output_dir, f"{safe_title}_complete.md")
     
     try:
         with open(filename, 'w', encoding='utf-8') as f:
-            f.write(f"# {story['title']}\n\n")
+            original_title = story.get('original_title', story['title'])
+            f.write(f"# {original_title}\n\n")
             f.write(story['text'])
-            f.write(f"\n\n---\n\n")
-            f.write("## Story Statistics\n\n")
+            f.write("\n\n---\n\n## Story Statistics\n\n")
             f.write(f"- **Word Count:** {story['word_count']:,} words\n")
             f.write(f"- **Target:** {story['target_words']:,} words\n")
             f.write(f"- **Achievement:** {story['health_ratio']:.1%}\n")
             f.write(f"- **Scenes Completed:** {story['scenes_completed']}\n")
             f.write(f"- **Scenes Failed:** {story['scenes_failed']}\n")
             f.write(f"- **Health Status:** {'✓ HEALTHY' if story['health_ratio'] >= 0.8 else '⚠ BELOW THRESHOLD'}\n")
-        
         print(f"Story saved: {filename}")
-        print(f"Final statistics: {story['word_count']:,} words ({story['health_ratio']:.1%} of target)")
         return filename
     except Exception as e:
         print(f"Error saving story: {e}")
         return None
 
 def generate_audio(text: str, output_dir: str = 'outputs', story_title: str = 'story') -> Optional[str]:
-    """Generate audio narration with better error handling"""
+    """Generate audio narration"""
     try:
         print("Generating audio narration...")
         os.makedirs(output_dir, exist_ok=True)
-        
-        # Create filename from title
-        safe_title = re.sub(r'[^\w\s-]', '', story_title).strip()
-        safe_title = re.sub(r'[-\s]+', '_', safe_title).lower()
+        safe_title = re.sub(r'[^\w\s-]', '', story_title).strip().replace(' ', '_').lower()
         output_file = os.path.join(output_dir, f"{safe_title}_narration.wav")
         
-        # Check if kokoro is available
         try:
             pipeline = kokoro.KPipeline(lang_code='a')
         except Exception as e:
-            print(f"Kokoro not available: {e}")
+            print(f"Kokoro not available for audio generation: {e}")
             return None
         
         audio_segments = []
-        
-        # Split text into manageable chunks (by paragraphs)
         paragraphs = [p.strip() for p in text.split('\n\n') if p.strip()]
         total_paragraphs = len(paragraphs)
         
         for i, paragraph in enumerate(paragraphs):
-            if len(paragraph) > 500:  # Split long paragraphs
-                sentences = paragraph.split('. ')
-                for j in range(0, len(sentences), 3):  # 3 sentences per chunk
-                    chunk = '. '.join(sentences[j:j+3])
-                    if chunk:
-                        try:
-                            generator = pipeline(chunk, voice='bm_fable')
-                            for _, _, audio in generator:
-                                if audio is not None and len(audio) > 0:
-                                    audio_segments.append(audio)
-                        except Exception as e:
-                            print(f"Error processing chunk: {e}")
-            else:
-                try:
-                    generator = pipeline(paragraph, voice='bm_fable')
-                    for _, _, audio in generator:
-                        if audio is not None and len(audio) > 0:
-                            audio_segments.append(audio)
-                except Exception as e:
-                    print(f"Error processing paragraph: {e}")
-            
-            if i % 10 == 0:  # Progress update
-                print(f"Audio progress: {i}/{total_paragraphs} paragraphs processed")
+            try:
+                # Process in smaller chunks to avoid overwhelming the TTS
+                sentences = re.split(r'(?<=[.!?])\s+', paragraph)
+                for sentence in sentences:
+                    if sentence:
+                        generator = pipeline(sentence, voice='bm_fable')
+                        for _, _, audio in generator:
+                            if audio is not None and len(audio) > 0:
+                                audio_segments.append(audio)
+            except Exception as e:
+                print(f"Error processing audio for a paragraph segment: {e}")
+            if (i + 1) % 10 == 0 or (i + 1) == total_paragraphs:
+                print(f"Audio progress: {i + 1}/{total_paragraphs} paragraphs processed")
 
         if audio_segments:
             combined_audio = np.concatenate(audio_segments, axis=0)
@@ -505,181 +319,110 @@ def generate_audio(text: str, output_dir: str = 'outputs', story_title: str = 's
             print(f"Audio saved: '{output_file}' (Duration: {duration/60:.2f} minutes)")
             return output_file
         else:
-            print("No audio segments generated")
+            print("No audio segments were generated.")
             return None
-            
     except Exception as e:
-        print(f"Error generating audio: {e}")
+        print(f"An error occurred during audio generation: {e}")
         return None
 
 def send_to_telegram(bot_token: str, chat_id: str, text_file: str = None, audio_file: str = None):
-    """Send files to Telegram with better error handling"""
+    """Send files to Telegram"""
     if not bot_token or not chat_id:
-        print("Telegram credentials not provided (set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID)")
+        print("Telegram credentials not provided. Skipping upload.")
         return
-        
     url = f"https://api.telegram.org/bot{bot_token}/sendDocument"
-    
-    files_to_send = []
-    if text_file and os.path.exists(text_file):
-        files_to_send.append(('story', text_file))
-    if audio_file and os.path.exists(audio_file):
-        files_to_send.append(('audio', audio_file))
-    
-    for file_type, file_path in files_to_send:
-        try:
-            file_size = os.path.getsize(file_path) / (1024 * 1024)  # MB
-            print(f"Uploading {file_type} ({file_size:.1f} MB) to Telegram...")
-            
-            with open(file_path, 'rb') as f:
-                files = {'document': f}
-                data = {'chat_id': chat_id}
-                response = requests.post(url, data=data, files=files, timeout=300)
-                
-                if response.status_code == 200:
-                    print(f"✓ Successfully sent {file_type} to Telegram")
-                else:
-                    print(f"✗ Failed to send {file_type}: {response.status_code} - {response.text}")
-        except Exception as e:
-            print(f"✗ Error sending {file_type}: {e}")
+    for file_type, file_path in [('story', text_file), ('audio', audio_file)]:
+        if file_path and os.path.exists(file_path):
+            try:
+                print(f"Uploading {file_type} to Telegram...")
+                with open(file_path, 'rb') as f:
+                    files = {'document': f}
+                    response = requests.post(url, data={'chat_id': chat_id}, files=files, timeout=300)
+                    if response.status_code == 200: print(f"✓ Successfully sent {file_type}.")
+                    else: print(f"✗ Failed to send {file_type}: {response.text}")
+            except Exception as e:
+                print(f"✗ Error sending {file_type}: {e}")
 
-def create_example_outline():
-    """Create an example story outline file"""
-    example_content = """# The Cursed Inheritance
-
-## Story Outline
-When Sarah inherits her grandmother's Victorian mansion, she discovers it comes with more than just dusty furniture and old photographs. Hidden in the walls are journals detailing a century of dark family secrets, ritualistic practices, and a curse that has claimed the life of every woman in her bloodline on their 30th birthday.
-
-As Sarah's 30th birthday approaches, strange occurrences begin to plague the house. Shadows move independently, whispers echo through empty rooms, and she begins experiencing vivid nightmares of her ancestors' deaths. She learns that her grandmother tried to break the curse but failed, becoming its latest victim.
-
-The story follows Sarah's desperate race against time as she unravels the mystery of the family curse, confronts the malevolent spirit that enforces it, and must decide whether to sacrifice herself to save future generations or find another way to break the cycle of death that has haunted her family for over a century.
-
-## Key Characters
-- Sarah Mitchell: 29-year-old protagonist, inherits the cursed mansion
-- Eleanor Whitmore: Sarah's deceased grandmother, previous victim of the curse
-- The Shadow Entity: Malevolent spirit that enforces the family curse
-- Marcus Chen: Local historian who helps Sarah research her family history
-- Dr. Rebecca Torres: Paranormal investigator Sarah contacts for help
-
-## Setting
-- The Whitmore Victorian Mansion: A sprawling, isolated house built in 1890
-- Millbrook, a small New England town with a dark history
-- Time period: Present day, with flashbacks to previous generations
-"""
-    
-    with open('example_story_outline.md', 'w', encoding='utf-8') as f:
-        f.write(example_content)
-    
-    print("Example story outline created: example_story_outline.md")
-    return 'example_story_outline.md'
+def print_final_report(story: Dict[str, str]):
+    """Print a detailed final report"""
+    print(f"\n{'='*50}\nFINAL STORY REPORT\n{'='*50}")
+    original_title = story.get('original_title', story['title'])
+    print(f"Title: {original_title}")
+    print(f"Word Count: {story['word_count']:,} words")
+    print(f"Achievement: {story['health_ratio']:.1%}")
+    print(f"Health Status: {'✓ HEALTHY' if story['health_ratio'] >= 0.8 else '⚠ BELOW THRESHOLD'}")
+    print(f"Scenes Completed: {story['scenes_completed']} / Failed: {story['scenes_failed']}")
+    if story['health_ratio'] < 0.8:
+        print("⚠ Story below health threshold - quality may be inconsistent.")
+    print(f"{'='*50}")
 
 def main():
-    """Main execution function with command line arguments"""
-    parser = argparse.ArgumentParser(description='Generic Horror Story Generator')
-    parser.add_argument('--input', '-i', type=str, help='Input markdown file with story outline')
-    parser.add_argument('--output', '-o', type=str, default='outputs', help='Output directory')
-    parser.add_argument('--create-example', action='store_true', help='Create an example story outline')
-    parser.add_argument('--no-audio', action='store_true', help='Skip audio generation')
-    parser.add_argument('--no-telegram', action='store_true', help='Skip Telegram upload')
+    """Main execution function with a self-contained story outline."""
     
-    args = parser.parse_args()
-    
-    print("=== GENERIC HORROR STORY GENERATOR ===")
+    # The story outline is now a multi-line string inside the script.
+    # No external .md file is needed.
+    story_outline_str = """
+# The Waterkloof Silence
+
+## Story Outline
+In present-day Pretoria, Liam, a driven journalism student at Tuks, stumbles upon a microfiche archive detailing a series of unsolved murders from 1988. The victims, all young activists, were found along the tranquil Moreleta Spruit hiking trail. The case was dubbed "The Spruit Silencings" before it was abruptly classified and buried by the apartheid-era security apparatus.
+
+Driven by a desire to uncover a hidden piece of Pretoria's history for his thesis, Liam begins to digitize the case files. He quickly finds that official reports are heavily redacted and key evidence is "missing." When he tries to contact the original investigating detective, now a recluse, he's met with a paranoid warning to "let the dead stay buried."
+
+As Liam digs deeper, a chilling sense of being watched descends upon him. His flat in Hatfield is broken into, but nothing is stolen—only his research notes are disturbed. A shadowy car, an old Ford Sierra, seems to appear wherever he goes. The horror is not supernatural, but the terrifyingly real possibility that the powerful individual who silenced the activists forty years ago is still out there, and is now methodically silencing Liam's investigation.
+
+## Key Characters
+- **Liam van der Merwe:** 22-year-old journalism student at the University of Pretoria, idealistic and relentless.
+- **The Man in the Sierra:** A shadowy, older figure who represents the unpunished evil of the past. His identity is unknown.
+- **Retired Detective Bester:** The original investigator, now living in fear in a small North West town, tormented by the case he was forced to abandon.
+
+## Setting
+- **Pretoria, South Africa:** The leafy, jacaranda-lined suburbs like Waterkloof, the bustling student area of Hatfield, the sterile National Archives, and the ominously quiet Moreleta Spruit nature reserve.
+- **Time Period:** Modern day, with journalistic research and flashbacks revealing the oppressive atmosphere of Pretoria in the late 1980s.
+"""
+
+    print("=== GENERIC HORROR STORY GENERATOR (Self-Contained Mode) ===")
     print("Target: 10,000 words | Health threshold: 80%")
-    print("Using full model context (8192 tokens)")
-    
-    # Create example if requested
-    if args.create_example:
-        create_example_outline()
-        return
-    
-    # Determine input file
-    input_file = args.input
-    if not input_file:
-        # Look for common input file names
-        possible_files = ['story_outline.md', 'outline.md', 'story.md', 'input.md']
-        for filename in possible_files:
-            if os.path.exists(filename):
-                input_file = filename
-                print(f"Found input file: {input_file}")
-                break
-        
-        if not input_file:
-            print("No input file specified. Use --input to specify a file, or --create-example to create a template.")
-            return
-    
-    if not os.path.exists(input_file):
-        print(f"Input file not found: {input_file}")
-        return
     
     generator = GenericHorrorGenerator()
-    
     if not generator.model_loaded:
-        print("ERROR: Model not loaded. Please check your setup.")
+        print("\nERROR: Model not loaded. Please check your setup.")
         return
     
-    # Load story data
-    markdown_text = read_markdown_file(input_file)
-    story_data = extract_story_data(markdown_text)
-    
-    print(f"\nGenerating story: '{story_data['title']}'")
-    print(f"Input file: {input_file}")
-    print(f"Output directory: {args.output}")
+    # Extract story data directly from the internal string
+    story_data = extract_story_data(story_outline_str)
     
     # Generate the complete story
-    print("\n=== STORY GENERATION ===")
     story = generator.generate_complete_story(story_data)
     
-    # Save the story
-    story_file = save_story(story, args.output)
-    
-    if story_file:
-        print_final_report(story)
+    # Save the story and generate audio
+    if story['word_count'] > 0:
+        # Use the original title for metadata but a safe version for the filename
+        story['original_title'] = story.get('title', 'story')
         
-        # Generate audio if story is healthy and not disabled
-        audio_file = None
-        if not args.no_audio and story['health_ratio'] >= 0.8:
-            print("\n=== AUDIO GENERATION ===")
-            audio_file = generate_audio(story['text'], args.output, story['title'])
-        elif args.no_audio:
-            print("\n=== SKIPPING AUDIO (disabled) ===")
-        else:
-            print("\n=== SKIPPING AUDIO (Story below health threshold) ===")
+        story_file = save_story(story, 'outputs')
         
-        # Send to Telegram if configured and not disabled
-        if not args.no_telegram:
+        if story_file:
+            print_final_report(story)
+            
+            audio_file = None
+            if story['health_ratio'] >= 0.8:
+                print("\n=== AUDIO GENERATION ===")
+                audio_file = generate_audio(story['text'], 'outputs', story['title'])
+            else:
+                print("\n=== SKIPPING AUDIO (Story health is below threshold) ===")
+            
             print("\n=== TELEGRAM UPLOAD ===")
             bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
             chat_id = os.getenv('TELEGRAM_CHAT_ID')
             send_to_telegram(bot_token, chat_id, story_file, audio_file)
-        else:
-            print("\n=== SKIPPING TELEGRAM (disabled) ===")
-        
-        print("\n=== PROCESS COMPLETE ===")
-        print(f"Story generated: {story_file}")
-        if audio_file:
-            print(f"Audio generated: {audio_file}")
+            
+            print("\n=== PROCESS COMPLETE ===")
+            print(f"Story saved to: {story_file}")
+            if audio_file:
+                print(f"Audio saved to: {audio_file}")
     else:
-        print("ERROR: Failed to save story")
-
-def print_final_report(story: Dict[str, str]):
-    """Print a detailed final report"""
-    print(f"\n{'='*50}")
-    print(f"FINAL STORY REPORT")
-    print(f"{'='*50}")
-    print(f"Title: {story['title']}")
-    print(f"Word Count: {story['word_count']:,} words")
-    print(f"Target: {story['target_words']:,} words")
-    print(f"Achievement: {story['health_ratio']:.1%}")
-    print(f"Health Status: {'✓ HEALTHY' if story['health_ratio'] >= 0.8 else '⚠ BELOW THRESHOLD'}")
-    print(f"Scenes Completed: {story['scenes_completed']}")
-    print(f"Scenes Failed: {story['scenes_failed']}")
-    
-    if story['health_ratio'] >= 0.8:
-        print("✓ Story meets quality standards")
-    else:
-        print("⚠ Story below health threshold - consider regeneration")
-    print(f"{'='*50}")
+        print("\nERROR: Failed to generate or save the story.")
 
 if __name__ == "__main__":
     main()
