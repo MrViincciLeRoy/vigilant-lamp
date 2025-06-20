@@ -35,6 +35,7 @@ class GenericHorrorGenerator:
         self.model_loaded = llm is not None
         self.story_context = ""
         self.scene_summaries = []  # NEW: Track scene summaries for better context
+        self.current_story_data = {}  # NEW: Store current story data
 
         # MODIFICATION: Drastically reduced total word count to make it feasible on a GitHub runner.
         self.total_target_words = 2800
@@ -159,7 +160,7 @@ class GenericHorrorGenerator:
         if scene_num == 1:
             prompt = f"""You are writing a brutal, realistic horror story in the style of Jack Ketchum. Write the opening scene with visceral impact and psychological depth.
 
-STORY: {story_data['title']}
+STORY: {self.current_story_data['title']}
 SCENE: {title} - {description}
 
 MANDATORY ELEMENTS TO INTRODUCE:
@@ -176,7 +177,7 @@ WRITING INSTRUCTIONS:
 Begin the story now:"""
 
         else:
-            prompt = f"""Continue the horror story "{story_data['title']}" with the next scene. Ensure narrative progression and avoid repetition.
+            prompt = f"""Continue the horror story "{self.current_story_data['title']}" with the next scene. Ensure narrative progression and avoid repetition.
 
 {focused_context}
 
@@ -214,7 +215,7 @@ Continue the story:"""
                 presence_penalty=0.05,  # NEW: Encourage new concepts
                 stop=[
                     "###", "---", "The End", "Chapter", "CHAPTER", 
-                    "\n\n\n", story_data['title'], "SCENE", "Scene",
+                    "\n\n\n", self.current_story_data['title'], "SCENE", "Scene",
                     "STORY:", "INSTRUCTIONS:", "MANDATORY ELEMENTS:",
                     "CRITICAL INSTRUCTIONS:", "Continue the story:"
                 ],
@@ -315,6 +316,9 @@ Continue the story:"""
         print(f"=== Generating Complete Horror Story: '{story_data['title']}' ===")
         print(f"Target: {self.total_target_words} words | Health Threshold: {self.health_threshold:.0%}")
 
+        # Store story data for use in scene generation
+        self.current_story_data = story_data
+        
         # Reset context for new story
         self.scene_summaries = []
         
