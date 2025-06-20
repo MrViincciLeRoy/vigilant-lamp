@@ -47,26 +47,29 @@ class OptimizedHorrorGenerator:
         if not self.model_loaded:
             self.load_model_optimized()
 
-        title = episode_data['title'].replace('"', '\\"')
-        outline = episode_data['outline'].replace('"', '\\"')
+        # Preprocess strings to escape double quotes
+        title = episode_data['title'].replace('"', '""')
+        outline = episode_data['outline'].replace('"', '""')
+        context_snippet = prev_context[-200:].replace('"', '""')
+
         if chapter_num == 1:
-            segment_prompt = f'''# Chapter {chapter_num}: Opening of "{title}"
+            segment_prompt = f"""# Chapter {chapter_num}: Opening of "{title}"
 
 Write the opening chapter of "{title}" in Jack Ketchum's horror style. Focus on psychological terror, vivid imagery, and a disturbing atmosphere. Introduce key characters and the setting based on the outline:
 
 {outline}
 
 Begin with a chilling atmosphere and character introductions, setting the stage for the horror to unfold:
-'''
+"""
         else:
-            segment_prompt = f'''# Chapter {chapter_num}: Continuation of "{title}"
+            segment_prompt = f"""# Chapter {chapter_num}: Continuation of "{title}"
 
 Continue "{title}" in Jack Ketchum's horror style. Focus on escalating psychological terror, vivid imagery, and a disturbing atmosphere. Build on the previous chapter:
 
-Previous: ...{prev_context[-200:].replace('"', '\\"')}
+Previous: ...{context_snippet}
 
 Advance the plot with new developments, intensifying the horror, and maintain narrative continuity:
-'''
+"""
 
         print(f"Generating Chapter {chapter_num}...")
         output = self.llm(
