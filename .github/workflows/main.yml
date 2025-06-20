@@ -1,3 +1,4 @@
+# .github/workflows/main.yml
 name: Generate Horror Series and Send to Telegram
 
 on:
@@ -16,50 +17,57 @@ concurrency:
 jobs:
   generate-and-send:
     runs-on: ubuntu-latest
+    # MODIFICATION: Add a timeout to prevent runaway jobs from consuming all your free minutes.
+    timeout-minutes: 55 
 
     steps:
-      # Checkout the repository
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Set up Python
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      # Install system dependencies
+      # MODIFICATION: Add caching step for the Hugging Face model hub.
+      # This will save the downloaded LLM file between runs.
+      - name: Cache Hugging Face models
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface/hub
+          key: ${{ runner.os }}-huggingface-hub-${{ hashFiles('**/horror_generator.py') }}
+          restore-keys: |
+            ${{ runner.os }}-huggingface-hub-
+
       - name: Install system dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y espeak-ng libsndfile1
 
-      # Install Python dependencies
       - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install torch transformers llama-cpp-python huggingface_hub kokoro soundfile requests
+          # Use a specific, known-good version of llama-cpp-python
+          pip install torch transformers "llama-cpp-python==0.2.79" huggingface_hub kokoro soundfile requests
 
-      # Create directory for outputs
       - name: Create output directory
         run: mkdir -p outputs
 
-      # Run the horror generator script
       - name: Run horror generator
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python horror_generator.py
 
-      # Upload artifacts
       - name: Upload story and audio
+        if: success() # Only run if the generator succeeds
         uses: actions/upload-artifact@v4
         with:
           name: horror-series-outputs
           path: outputs/
 
-      # Clean up
+      # This cleanup step is fine, no changes needed.
       - name: Clean up
+        if: always() # Always run cleanup
         run: |
           rm -rf outputs
-          rm -f fast_outline.md
