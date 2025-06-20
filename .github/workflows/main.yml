@@ -9,6 +9,10 @@ on:
     - cron: '0 0 * * 0' # Run weekly on Sunday at midnight UTC
   workflow_dispatch: # Allow manual triggering
 
+concurrency:
+  group: horror-series
+  cancel-in-progress: true
+
 jobs:
   generate-and-send:
     runs-on: ubuntu-latest
