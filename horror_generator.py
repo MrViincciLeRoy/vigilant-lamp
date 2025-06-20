@@ -525,6 +525,6 @@ The horror lies not just in the stalker’s sadistic methods but in the systemic
 ## Setting  
 - **Soshanguve, Pretoria:** The story is set in the densely populated township of Soshanguve, where poverty and crime create a tense and volatile backdrop. The stark contrast between the community’s faith-driven culture and the dark secrets lurking beneath adds to the story’s unsettling atmosphere.  
 - **Time Period:** Present day, with the central crimes reflecting the real-life struggles of survivors seeking justice in a system that often fails them.  
-"""
+""".replace("-", "") 
 
     main(jack_ketchum_story_outline)
