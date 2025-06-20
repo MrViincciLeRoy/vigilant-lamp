@@ -1,0 +1,9 @@
+# Python Dependencies for Horror Generator
+
+torch
+transformers
+llama-cpp-python==0.2.79
+huggingface_hub
+kokoro
+soundfile
+requests
