@@ -72,7 +72,7 @@ class KetchumStyleHorrorGenerator:
                 "sections": [
                     {"section": 1, "title": "Gathering Clues", "description": f"{protagonist} uncovers evidence linking {crime} to broader issues affecting black women.", "target_words": 300},
                     {"section": 2, "title": "Obstacles", "description": f"Roadblocks emerge, such as community distrust or police corruption in {setting}.", "target_words": 300},
-                    {"section": 3, "title": "Breakthrough", "description": f"A key clue or witness points {protagonist} toward {antagonist}.", "target_words":  Pas300},
+                    {"section": 3, "title": "Breakthrough", "description": f"A key clue or witness points {protagonist} toward {antagonist}.", "target_words": 300},
                     {"section": 4, "title": "Escalation", "description": f"The stakes rise as {antagonist} strikes again, targeting another black woman.", "target_words": 300}
                 ]
             },
@@ -337,7 +337,9 @@ Signature: A carved symbol left on the victims’ bodies.
         final_story = generator.generate_complete_story(story_idea)
         if final_story and final_story['word_count'] > 0:
             save_story(final_story)
-            output_file = f"outputs/{re.sub(r'[^\w\s-]', '', final_story['title']).strip().replace(' ', '_')}_Audiobook.wav"
+            # Compute the safe filename outside the f-string to avoid backslash issue
+            safe_title = re.sub(r'[^\w\s-]', '', final_story['title']).strip().replace(' ', '_')
+            output_file = os.path.join('outputs', f"{safe_title}_Audiobook.wav")
             generate_audio(final_story['text'], output_file=output_file)
         else:
             print("Story generation failed: empty content.")
