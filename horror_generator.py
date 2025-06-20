@@ -222,7 +222,7 @@ def extract_story_idea_from_prompt(prompt_text: str) -> Dict[str, str]:
             idea[key] = value.strip()
     return idea
 
-def save_story(story: Dict[str, any], output_dir: str = 'stories') -> None:
+def save_story(story: Dict[str, any], output_dir: str = 'outputs') -> None:
     """Saves the generated story to a Markdown file."""
     os.makedirs(output_dir, exist_ok=True)
     safe_title = re.sub(r'[^\w\s-]', '', story['title']).strip().replace(' ', '_')
@@ -232,7 +232,6 @@ def save_story(story: Dict[str, any], output_dir: str = 'stories') -> None:
         f.write(f"**Word Count:** {story['word_count']}\n\n")
         f.write(story['text'])
     print(f"Story successfully saved to: {filename}")
-
 # --- MAIN EXECUTION BLOCK ---
 if __name__ == "__main__":
     # --- STORY PROMPT ---
