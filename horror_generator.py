@@ -1,4 +1,3 @@
-"""Generic Horror Story Generator - Cohesive Story with Full Context Usage (Optimized for CI/CD)"""
 import os
 import torch
 from huggingface_hub import hf_hub_download
@@ -35,52 +34,53 @@ class GenericHorrorGenerator:
         self.llm = llm
         self.model_loaded = llm is not None
         self.story_context = ""
-        
+
         # MODIFICATION: Drastically reduced total word count to make it feasible on a GitHub runner.
         # This is the most important change for performance.
-        self.total_target_words = 2800 
+        self.total_target_words = 2800
         self.health_threshold = 0.75  # 75% minimum word generation health is more forgiving
 
     def create_story_structure(self, story_data: Dict[str, str]) -> List[Dict[str, str]]:
-        """Create a detailed story structure with scenes and plot points based on the story outline"""
-        # MODIFICATION: The scene structure is now hardcoded and simplified for a shorter story.
-        # This avoids complex analysis and provides a reliable structure.
-        # Target words per scene are reduced from 1400 to 400.
+        """
+        Create a detailed story structure with scenes and plot points based on the story outline.
+        This version remains hardcoded for consistency and predictability in CI/CD,
+        but the content within scenes will be driven by the overall story_data.
+        """
         return [
             {
-                "scene": 1, "title": "The Cold Case",
-                "description": "Introduce the protagonist, Liam, and his fascination with a series of unsolved crimes from Pretoria's past.",
-                "target_words": 400, "key_elements": ["Protagonist introduction", "Setting the scene in modern Pretoria", "Discovery of the old case"]
+                "scene": 1, "title": "The First Stain",
+                "description": "Introduce Detective Naledi as she arrives at a horrifying crime scene in a seemingly peaceful Pretoria suburb.",
+                "target_words": 400, "key_elements": ["Detective Naledi introduction", "Brutal crime scene details (implied, not explicit gore)", "Initial shock and questions", "Setting the grim tone in Pretoria"]
             },
             {
-                "scene": 2, "title": "First Dig",
-                "description": "Liam begins his investigation, accessing archives and finding the first hints of a cover-up.",
-                "target_words": 400, "key_elements": ["Initial research", "Redacted files", "A sense of being watched"]
+                "scene": 2, "title": "Whispers from the Past",
+                "description": "Naledi uncovers a cold case from years ago with unsettling similarities, suggesting a serial pattern.",
+                "target_words": 400, "key_elements": ["Discovery of old files/connection", "Similar modus operandi", "Initial dismissal by colleagues", "Naledi's growing unease"]
             },
             {
-                "scene": 3, "title": "A Warning",
-                "description": "Liam receives a direct or indirect threat from retired Detective Bester, making him realize the danger is real.",
-                "target_words": 400, "key_elements": ["A veiled threat", "Escalating paranoia", "Contact with the reluctant source"]
+                "scene": 3, "title": "A Trail of Breadcrumbs",
+                "description": "The killer leaves cryptic clues, drawing Naledi deeper into their twisted game.",
+                "target_words": 400, "key_elements": ["Cryptic messages or symbols at crime scenes", "Killer taunting the police/Naledi directly", "Naledi follows a lead that takes her to a dark place", "Rising tension"]
             },
             {
-                "scene": 4, "title": "The Point of No Return",
-                "description": "A crucial piece of evidence is uncovered, but it puts Liam directly in the killer's sights. His flat is broken into.",
-                "target_words": 400, "key_elements": ["Major breakthrough", "Direct threat", "Notes are disturbed"]
+                "scene": 4, "title": "The Shadow Falls",
+                "description": "The killer escalates, targeting someone close to Naledi or leaving a particularly disturbing message.",
+                "target_words": 400, "key_elements": ["Personal threat or near-miss for Naledi", "Heightened sense of danger", "A chilling realization about the killer's motive", "Isolation of Naledi"]
             },
             {
-                "scene": 5, "title": "The Hunter and The Hunted",
-                "description": "Paranoia turns to terror as Liam realizes he is being actively hunted by the shadowy Man in the Sierra.",
-                "target_words": 400, "key_elements": ["Intensifying pursuit", "Isolation of the protagonist", "Desperate measures"]
+                "scene": 5, "title": "Beneath the Surface",
+                "description": "Naledi discovers a horrific secret about Pretoria's dark underbelly connected to the killer's motives.",
+                "target_words": 400, "key_elements": ["Uncovering a hidden network or dark history", "Motive is more twisted than initially thought", "Moral compromises or shocking revelations", "Naledi's determination amidst despair"]
             },
             {
-                "scene": 6, "title": "The Ghost of Pretoria",
-                "description": "The climax where Liam confronts the killer and the horrifying truth of the original crimes is revealed.",
-                "target_words": 400, "key_elements": ["Climactic confrontation", "Killer's identity and motive revealed", "Life-or-death struggle"]
+                "scene": 6, "title": "The Unveiling",
+                "description": "The climactic confrontation between Naledi and the killer, revealing their identity and the full horror.",
+                "target_words": 400, "key_elements": ["Climactic showdown at a desolate location (e.g., abandoned building)", "Killer's identity exposed", "Twisted philosophy or justification", "Brutal physical and psychological struggle"]
             },
             {
-                "scene": 7, "title": "Jacaranda Scars",
-                "description": "The aftermath, showing the psychological and physical scars left on Liam and the resolution of the case.",
-                "target_words": 400, "key_elements": ["Resolution of the main conflict", "Lingering consequences", "A somber sense of justice"]
+                "scene": 7, "title": "Lingering Scars",
+                "description": "The aftermath, exploring the psychological toll on Naledi and the lasting impact on Pretoria.",
+                "target_words": 400, "key_elements": ["Resolution of the main conflict (capture or death of killer)", "Naledi's trauma and changed outlook", "Pretoria grappling with the unearthed horrors", "A somber, unsettling peace, not a happy ending"]
             }
         ]
 
@@ -98,39 +98,49 @@ class GenericHorrorGenerator:
         target_words = scene_data["target_words"]
         key_elements = scene_data["key_elements"]
 
-        # MODIFICATION: Use a more concise context window to keep the prompt size manageable.
-        context_length = min(4000, len(previous_context))
-        recent_context = previous_context[-context_length:] if previous_context else ""
+        # MODIFICATION: Focus on a concise summary of the last completed scene for continuity,
+        # instead of the entire (potentially repetitive) history.
+        # This prevents the model from getting stuck in loops or repeating old info.
+        recent_context_summary = ""
+        if previous_context:
+            # Extract the last paragraph or two as a summary of the previous scene's end.
+            # This is a heuristic; a more sophisticated summary could be used.
+            last_paragraphs = previous_context.strip().split('\n\n')[-2:]
+            recent_context_summary = "\n\n".join(last_paragraphs)
 
-        # MODIFICATION: Simpler, more direct prompt structure.
+        # MODIFICATION: Stronger, more explicit prompt to ensure progression.
         if scene_num == 1:
-            prompt = f"""You are a master of psychological horror. Write the gripping opening scene of a true-crime story set in Pretoria, South Africa.
-STORY OUTLINE: {story_outline}
+            prompt = f"""You are a master of brutal, realistic horror, in the style of Jack Ketchum. Write the gripping opening scene of a true-crime story set in Pretoria, South Africa, focusing on the immediate shock and visceral impact of a horrifying, meticulously cruel crime. Avoid supernatural elements.
+STORY TITLE: {story_data['title']}
+STORY OUTLINE (for context, do not explicitly reference in text unless needed for plot): {story_outline}
 SCENE 1: {title} - {description}
-KEY ELEMENTS: {', '.join(key_elements)}
-INSTRUCTIONS: Write around {target_words} words. Begin the story now."""
+KEY ELEMENTS TO INCLUDE: {', '.join(key_elements)}.
+INSTRUCTIONS: Write around {target_words} words. Focus on introducing Detective Naledi, the grim reality of the crime scene, and setting a tone of unsettling dread. The horror should come from human depravity. Begin the story now.
+"""
         else:
-            prompt = f"""You are continuing a psychological horror story.
-STORY SO FAR:
-...{recent_context}
+            prompt = f"""You are continuing a brutal, realistic horror story titled "{story_data['title']}" set in Pretoria.
+LAST SCENE'S END (for continuity, do not repeat or re-introduce what's already known):
+...{recent_context_summary}
 
-NEXT SCENE: Scene {scene_num}: {title} - {description}
-KEY ELEMENTS TO INCLUDE: {', '.join(key_elements)}
-INSTRUCTIONS: Write the next part of the story, about {target_words} words, maintaining a dark, realistic tone. Continue seamlessly from the previous text."""
+CURRENT TASK: Write Scene {scene_num}: "{title}" - {description}
+KEY ELEMENTS TO INCLUDE: {', '.join(key_elements)}.
+INSTRUCTIONS: Write the next part of the story, about {target_words} words. **Ensure the narrative progresses logically and ruthlessly from the previous scene, focusing on the new key elements. Do not repeat previous details or re-introduce characters unless vital for new plot points. Advance the plot significantly, maintaining a grim, unflinching, and suspenseful tone.** Continue seamlessly:
+"""
 
         print(f"Generating Scene {scene_num}: '{title}' (target: {target_words} words)...")
-        # MODIFICATION: Reduced max_tokens to be closer to the target, preventing wasted generation.
-        # (target_words * 1.5) is a safer multiplier than 1.8.
-        max_tokens = int(target_words * 1.5)
-        
+        # MODIFICATION: Reduced max_tokens to be closer to the target to prevent excessive generation,
+        # and slightly lowered temperature for more focused output.
+        max_tokens = int(target_words * 1.3) # More conservative multiplier
+        temperature = 0.65 # Slightly lower for less randomness, more focus
+
         try:
             output = self.llm(
                 prompt,
                 max_tokens=max_tokens,
-                temperature=0.7,
+                temperature=temperature,
                 top_p=0.9,
                 repeat_penalty=1.1,
-                stop=["###", "---", "The End", "Chapter", "CHAPTER", "\n\n\n"], # Added more stop tokens
+                stop=["###", "---", "The End", "Chapter", "CHAPTER", "\n\n\n", story_data['title']], # Added story title as stop token
                 echo=False
             )
             scene_text = self._clean_and_format_text(output['choices'][0]['text'])
@@ -151,7 +161,9 @@ INSTRUCTIONS: Write the next part of the story, about {target_words} words, main
         if not text: return ""
         text = re.sub(r'```.*?```', '', text, flags=re.DOTALL)
         text = re.sub(r'\*\*\*+|---+', '', text)
-        lines = [line.strip() for line in text.split('\n') if line.strip() and not line.lower().startswith(('scene', '[', 'instruction'))]
+        # MODIFICATION: More aggressive cleaning of unwanted phrases that models sometimes output
+        text = re.sub(r'^(SCENE \d+:.*?|INSTRUCTIONS:.*?|KEY ELEMENTS TO INCLUDE:.*?|LAST SCENE\'S END:.*?|\.+)$', '', text, flags=re.MULTILINE | re.IGNORECASE)
+        lines = [line.strip() for line in text.split('\n') if line.strip() and not line.lower().startswith(('scene', '[', 'instruction', 'key elements', 'last scene\'s end', 'current task', 'story so far'))]
         formatted_text = '\n\n'.join(lines)
         return re.sub(r'\n{3,}', '\n\n', formatted_text).strip()
 
@@ -162,19 +174,21 @@ INSTRUCTIONS: Write the next part of the story, about {target_words} words, main
         print(f"=== Generating Complete Horror Story: '{story_data['title']}' ===")
         print(f"Target: {self.total_target_words} words | Health Threshold: {self.health_threshold:.0%}")
 
+        # The structure is now based on the new Ketchum-style scenes
         story_structure = self.create_story_structure(story_data)
         full_story_text = ""
         story_scenes, total_words, failed_scenes = [], 0, 0
-        
+
         outline_for_prompt = story_data.get('outline', '')
 
         for scene_data in story_structure:
             # Pass the current full story text as context
             scene_text = self.generate_scene(scene_data, outline_for_prompt, full_story_text)
-            
+
             if scene_text and not scene_text.startswith("[Error"):
                 story_scenes.append({'title': scene_data['title'], 'text': scene_text})
-                full_story_text += "\n\n" + scene_text # Update context for the next scene
+                # MODIFICATION: Only add actual generated text to context
+                full_story_text += "\n\n" + scene_text
                 scene_words = len(scene_text.split())
                 total_words += scene_words
                 print(f"  Progress: {total_words}/{self.total_target_words} words ({total_words/self.total_target_words*100:.1f}%)")
@@ -190,8 +204,8 @@ INSTRUCTIONS: Write the next part of the story, about {target_words} words, main
         print(f"Final word count: {total_words} words ({story_health:.1%} of target)")
 
         return {
-            'title': story_data['title'], 'text': complete_story_text, 'word_count': total_words, 
-            'target_words': self.total_target_words, 'health_ratio': story_health, 
+            'title': story_data['title'], 'text': complete_story_text, 'word_count': total_words,
+            'target_words': self.total_target_words, 'health_ratio': story_health,
             'scenes_completed': len(story_scenes), 'scenes_failed': failed_scenes
         }
 
@@ -208,7 +222,6 @@ def extract_story_data(markdown_text: str) -> Dict[str, str]:
 
 def save_story(story: Dict[str, str], output_dir: str = 'outputs') -> Optional[str]:
     """Save complete story with enhanced metadata"""
-    # This function is fine, no changes needed.
     os.makedirs(output_dir, exist_ok=True)
     safe_title = re.sub(r'[^\w\s-]', '', story['title']).strip().replace(' ', '_').lower()
     filename = os.path.join(output_dir, f"{safe_title}_complete.md")
@@ -231,7 +244,6 @@ def save_story(story: Dict[str, str], output_dir: str = 'outputs') -> Optional[s
 
 def generate_audio(text: str, output_dir: str = 'outputs', story_title: str = 'story') -> Optional[str]:
     """Generate audio narration"""
-    # MODIFICATION: Simplified audio generation to be more robust.
     try:
         print("Generating audio narration...")
         os.makedirs(output_dir, exist_ok=True)
@@ -249,12 +261,17 @@ def generate_audio(text: str, output_dir: str = 'outputs', story_title: str = 's
         if not chunks:
             print("No text to narrate.")
             return None
-            
+
         print(f"Narrating {len(chunks)} paragraphs...")
         # Use a generator expression for memory efficiency
         audio_generator = (audio for chunk in chunks for _, _, audio in pipeline(chunk, voice='bm_fable') if audio is not None and len(audio) > 0)
-        
-        combined_audio = np.concatenate(list(audio_generator), axis=0)
+
+        # Catch StopIteration if audio_generator is empty
+        try:
+            combined_audio = np.concatenate(list(audio_generator), axis=0)
+        except ValueError: # Catch ValueError for empty sequence
+            print("No audio segments were successfully generated (empty audio_generator).")
+            return None
 
         if combined_audio.size > 0:
             sf.write(output_file, combined_audio, 24000)
@@ -270,7 +287,6 @@ def generate_audio(text: str, output_dir: str = 'outputs', story_title: str = 's
 
 def send_to_telegram(bot_token: str, chat_id: str, text_file: str = None, audio_file: str = None):
     """Send files to Telegram"""
-    # This function is fine, no changes needed.
     if not bot_token or not chat_id:
         print("Telegram credentials not provided. Skipping upload.")
         return
@@ -287,22 +303,8 @@ def send_to_telegram(bot_token: str, chat_id: str, text_file: str = None, audio_
             except Exception as e:
                 print(f"✗ Error sending {file_type}: {e}")
 
-def main():
-    """Main execution function with a self-contained story outline."""
-    # The story outline is the same, but the script will generate a shorter story based on it.
-    story_outline_str = """
-# The Waterkloof Silence
-## Story Outline
-In present-day Pretoria, Liam, a driven journalism student at Tuks, stumbles upon a microfiche archive detailing a series of unsolved murders from 1988. The victims, all young activists, were found along the tranquil Moreleta Spruit hiking trail. The case was dubbed "The Spruit Silencings" before it was abruptly classified and buried by the apartheid-era security apparatus. Driven by a desire to uncover a hidden piece of Pretoria's history for his thesis, Liam begins to digitize the case files. He quickly finds that official reports are heavily redacted and key evidence is "missing." When he tries to contact the original investigating detective, now a recluse, he's met with a paranoid warning to "let the dead stay buried." As Liam digs deeper, a chilling sense of being watched descends upon him. His flat in Hatfield is broken into, but nothing is stolen—only his research notes are disturbed. A shadowy car, an old Ford Sierra, seems to appear wherever he goes. The horror is not supernatural, but the terrifyingly real possibility that the powerful individual who silenced the activists forty years ago is still out there, and is now methodically silencing Liam's investigation.
-## Key Characters
-- **Liam van der Merwe:** 22-year-old journalism student at the University of Pretoria, idealistic and relentless.
-- **The Man in the Sierra:** A shadowy, older figure who represents the unpunished evil of the past. His identity is unknown.
-- **Retired Detective Bester:** The original investigator, now living in fear in a small North West town, tormented by the case he was forced to abandon.
-## Setting
-- **Pretoria, South Africa:** The leafy, jacaranda-lined suburbs like Waterkloof, the bustling student area of Hatfield, the sterile National Archives, and the ominously quiet Moreleta Spruit nature reserve.
-- **Time Period:** Modern day, with journalistic research and flashbacks revealing the oppressive atmosphere of Pretoria in the late 1980s.
-"""
-
+def main(story_outline_str: str):
+    """Main execution function, now accepting story outline as an argument."""
     print("=== OPTIMIZED HORROR STORY GENERATOR ===")
 
     generator = GenericHorrorGenerator()
@@ -318,7 +320,7 @@ In present-day Pretoria, Liam, a driven journalism student at Tuks, stumbles upo
 
         if story_file:
             audio_file = generate_audio(story['text'], 'outputs', story['title'])
-            
+
             print("\n=== TELEGRAM UPLOAD ===")
             bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
             chat_id = os.getenv('TELEGRAM_CHAT_ID')
@@ -329,4 +331,21 @@ In present-day Pretoria, Liam, a driven journalism student at Tuks, stumbles upo
         print("\nERROR: Failed to generate a story with any content.")
 
 if __name__ == "__main__":
-    main()
+    # --- New Jack Ketchum-style Story Prompt for Pretoria Crimes ---
+    jack_ketchum_story_outline = """
+# The Jacaranda Butcher
+## Story Outline
+Pretoria, present day. The city's deceptive tranquility is shattered by a series of meticulously cruel and grotesque murders, targeting individuals seemingly unconnected – a prominent architect, a respected high school teacher, and a struggling street artist. The killer leaves no forensic evidence, only a signature: each victim is found horrifically disfigured, with a single jacaranda blossom placed deliberately near their desecrated body. Detective Naledi Mohapi, a seasoned but weary investigator, is assigned the case. She quickly realizes these aren't random acts of violence; there's a cold, calculated motive, a deep-seated grievance. As Naledi delves into the victims' pasts, she uncovers a dark, shared secret from decades ago, a forgotten atrocity linked to a specific institution or event in Pretoria's history. The killer, dubbed "The Jacaranda Butcher" by the horrified media, is meticulously executing a long-dormant vengeance, and Naledi soon finds herself caught in a horrifying game of cat and mouse, where every clue is a taunt, and every step closer puts her in mortal peril. The horror is in the chilling human capacity for sustained malice and the hidden depravity beneath a beautiful city's surface.
+
+## Key Characters
+- **Detective Naledi Mohapi:** Mid-40s, sharp, jaded, and haunted by past cases. Driven to understand the 'why' behind the cruelty.
+- **The Jacaranda Butcher:** The methodical, brutal killer. Their identity is unknown initially, but they are driven by a profound, long-held grudge stemming from a past injustice.
+- **Dr. Elias Thorne:** A retired historian and former colleague of one of the victims, who holds a piece of the puzzle but is terrified to speak.
+
+## Setting
+- **Pretoria, South Africa:** From the leafy, affluent suburbs of Waterkloof and Brooklyn (where victims are found), to the grimy, forgotten industrial areas, and the historically rich but often unsettling governmental buildings and archives. The jacaranda trees, usually a symbol of beauty, become an ominous motif.
+- **Time Period:** Present day, with flashbacks and discoveries revealing buried atrocities from the late apartheid era or immediate post-apartheid period.
+"""
+
+    # Call the main function with the new story outline
+    main(jack_ketchum_story_outline)
