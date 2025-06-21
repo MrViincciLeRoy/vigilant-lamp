@@ -1,7 +1,7 @@
 import logging
 from pathlib import Path
 import re
-from typing import Dict, List, Optional
+from typing import Dict, List
 import gc
 from llama_cpp import Llama
 import numpy as np
@@ -63,6 +63,8 @@ class KetchumStyleHorrorGenerator:
         signature = story_idea.get('signature', 'a chilling mark left at the scene')
 
         acts = [
+            # The act structure remains the same as in your original code.
+            # ... (structure for Acts 1-6) ...
             {
                 "act": 1, "title": "The Crime", "description": "Introduces the crime and protagonist.",
                 "sections": [
@@ -121,12 +123,28 @@ class KetchumStyleHorrorGenerator:
         return acts
 
     def _build_focused_context(self) -> str:
-        """Summarizes the last three sections for context."""
-        if not self.section_summaries:
-            return ""
-        num_to_include = min(3, len(self.section_summaries))
-        relevant_summaries = self.section_summaries[-num_to_include:]
-        return "PREVIOUSLY IN THE STORY:\n" + "\n".join(relevant_summaries)
+        """
+        FIXED: Builds context with key characters and recent plot points to improve consistency.
+        """
+        # Persistent character context
+        protagonist = self.current_story_data.get('protagonist', 'A determined black female detective')
+        antagonist = self.current_story_data.get('antagonist', 'A ruthless killer')
+        
+        char_context = (
+            "KEY CHARACTERS:\n"
+            f"- Protagonist: {protagonist}\n"
+            f"- Antagonist: {antagonist}\n"
+        )
+
+        # Recent plot context
+        plot_context = ""
+        if self.section_summaries:
+            num_to_include = min(3, len(self.section_summaries))
+            relevant_summaries = self.section_summaries[-num_to_include:]
+            plot_context = "PREVIOUSLY IN THE STORY:\n" + "\n".join(relevant_summaries)
+
+        return f"{char_context}\n{plot_context}"
+
 
     def generate_section(self, act_num: int, section_num: int, section_data: Dict[str, str]) -> str:
         """Generates a single story section."""
@@ -196,10 +214,30 @@ INSTRUCTIONS:
             return f"[Error: Could not generate Act {act_num}, Section {section_num}]"
 
     def _clean_text(self, text: str) -> str:
-        """Removes unwanted lines from generated text."""
+        """
+        FIXED: Removes unwanted lines and artifacts, and attempts to fix encoding errors.
+        """
+        # Attempt to fix common encoding errors from model output (e.g., 'â€' should be '”')
+        try:
+            # This sequence can fix text that was decoded with the wrong codec (e.g., UTF-8 as Latin-1)
+            text = text.encode('latin1').decode('utf-8')
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            # If the text is already valid, this might fail, which is fine.
+            pass
+
         text = text.strip()
+        
+        # Remove unwanted headers, instructions, and AI self-prompts.
         lines = text.split('\n')
-        cleaned_lines = [line for line in lines if not re.match(r'^(WRITING STYLE|INSTRUCTIONS|SECTION|You are|STORY TITLE)', line, re.IGNORECASE)]
+        unwanted_patterns = re.compile(
+            r'^(WRITING STYLE|INSTRUCTIONS|SECTION|You are|STORY TITLE|CURRENT SECTION|SECTION GOAL|PREVIOUSLY IN THE STORY|KEY CHARACTERS)|'
+            r'^(Word Count: \d+)|'
+            r'^(Please critique this section)|'
+            r'^---$',
+            re.IGNORECASE
+        )
+        cleaned_lines = [line for line in lines if not unwanted_patterns.match(line.strip())]
+        
         return '\n\n'.join(cleaned_lines).strip()
 
     def _validate_section(self, section_text: str, target_words: int) -> bool:
@@ -250,26 +288,44 @@ INSTRUCTIONS:
             'text': complete_story_text,
             'word_count': total_words,
         }
+
+def clean_for_audio(text: str) -> str:
+    """
+    NEW: Removes Markdown formatting for clean audio generation.
+    Handles UTF-8 and ensures plain text output.
+    """
+    logger.info("Cleaning text for audio by removing Markdown...")
+    # Remove markdown headers (e.g., ##, ###) and surrounding whitespace
+    text = re.sub(r'^\s*#+\s*', '', text, flags=re.MULTILINE)
+    # Remove markdown bolding (**)
+    text = text.replace('**', '')
+    # Remove markdown horizontal rules (---) and other separators
+    text = re.sub(r'^\s*---\s*$', '', text, flags=re.MULTILINE)
+    # Normalize newlines to ensure consistent spacing
+    text = re.sub(r'\n{3,}', '\n\n', text).strip()
+    logger.info("Text cleaning complete.")
+    return text
+
 def generate_audio(text: str, output_file: str = 'outputs/complete_narration.wav'):
-    """Generate audio narration."""
+    """Generate audio narration from clean text."""
     try:
-        print("Generating audio narration...")
+        logger.info("Generating audio narration...")
         os.makedirs('outputs', exist_ok=True)
-        
+
         pipeline = KPipeline(lang_code='a')
         audio_segments = []
+
+        # Split text into manageable chunks by paragraphs
+        text_chunks = [chunk for chunk in text.split('\n\n') if chunk.strip()]
         
-        # Split text into manageable chunks
-        sentences = text.split('. ')
-        chunk_size = 5  # Process 5 sentences at a time
-        
-        for i in range(0, len(sentences), chunk_size):
-            chunk = '. '.join(sentences[i:i+chunk_size])
+        total_chunks = len(text_chunks)
+        logger.info(f"Splitting text into {total_chunks} chunks for audio processing.")
+
+        for i, chunk in enumerate(text_chunks):
             if chunk:
+                logger.info(f"Processing audio for chunk {i+1}/{total_chunks}...")
                 generator = pipeline(chunk, voice='bm_fable')
-                
-                for j, (gs, ps, audio) in enumerate(generator):
-                    print(f"Processing audio chunk {i//chunk_size + 1}, segment {j}")
+                for _, _, audio in generator:
                     if audio is not None and len(audio) > 0:
                         audio_segments.append(audio)
 
@@ -277,38 +333,15 @@ def generate_audio(text: str, output_file: str = 'outputs/complete_narration.wav
             combined_audio = np.concatenate(audio_segments, axis=0)
             sf.write(output_file, combined_audio, 24000)
             duration = len(combined_audio) / 24000
-            print(f"Audio saved as '{output_file}' (Duration: {duration:.2f} seconds)")
+            logger.info(f"Audio saved as '{output_file}' (Duration: {duration:.2f} seconds)")
             return output_file
         else:
-            print("No audio segments generated")
+            logger.warning("No audio segments were generated.")
             return None
-            
-    except AttributeError as e:
-        print(f"Error: Kokoro library issue - {e}. Ensure 'kokoro' is installed and supports KPipeline.")
-        return None
-    except FileNotFoundError as e:
-        print(f"Error: Missing model files - {e}. Ensure required files are available.")
-        return None
-    except Exception as e:
-        print(f"Error generating audio: {e}")
-        return None
 
-def __regenerate_audio(text: str, output_file: str):
-    """Generates audio narration with Kokoro TTS and saves it as WAV."""
-    logger.info("Generating audio narration...")
-    try:
-        pipeline = KPipeline(lang_code='a')
-        audio_segments = []
-        for i, (gs, ps, audio) in enumerate(pipeline(text, voice='en_heart')):
-            audio_segments.append(audio)
-        if not audio_segments:
-            raise ValueError("No audio segments generated.")
-        concatenated_audio = np.concatenate(audio_segments)
-        sf.write(output_file, concatenated_audio, 24000)
-        logger.info(f"Audio saved to {output_file}")
     except Exception as e:
-        logger.error(f"Failed to generate audio: {e}")
-        raise
+        logger.error(f"Error generating audio: {e}", exc_info=True)
+        return None
 
 def main():
     """Main function to generate story and audio."""
@@ -323,37 +356,50 @@ Antagonist: A calculating predator who uses charm and deception to lure vulnerab
 Setting: The divided neighborhoods of greater Pretoria—from well-to-do suburbs to the hidden dangers of tucked-away township streets.
 Crime: A string of abductions and murders targeting young Black women. Each victim was last seen on a seemingly innocent “date” after meeting someone through social media or community connections.
 Signature: The perpetrator leaves no body—once reported missing, victims vanish without a trace. A single, curated item belonging to each woman (a shoe, an earring) is left conspicuously in their bedroom, along with an ominous carved symbol—an ancient spiral, scratched into a mirror or a wall.
-
 """
 
     try:
         logger.info("Extracting story idea...")
         story_idea = extract_story_idea_from_prompt(story_prompt)
-        logger.info("Story idea extracted.")
+        logger.info(f"Story idea extracted for title: '{story_idea.get('title', 'N/A')}'")
 
         generator = KetchumStyleHorrorGenerator()
         logger.info("Generating story...")
         final_story = generator.generate_complete_story(story_idea)
+
         if final_story and final_story['word_count'] > 0:
-            story_file = output_dir / f"{final_story['title'].replace(' ', '_')}.md"
-            with open(story_file, 'w', encoding='utf-8') as f:
+            story_title = final_story['title'].replace(' ', '_')
+            
+            # Save the original markdown file
+            story_file_md = output_dir / f"{story_title}.md"
+            with open(story_file_md, 'w', encoding='utf-8') as f:
                 f.write(f"# {final_story['title']}\n\n")
                 f.write(f"**Word Count:** {final_story['word_count']}\n\n")
                 f.write(final_story['text'])
-            logger.info(f"Story saved to {story_file}")
+            logger.info(f"Story saved to {story_file_md}")
 
-            audio_file = output_dir / f"{final_story['title'].replace(' ', '_')}_Audiobook.wav"
-            generate_audio(final_story['text'], str(audio_file))
+            # FIXED: Clean the text for audio generation
+            audio_text = clean_for_audio(final_story['text'])
+            
+            # Save a clean .txt file for verification
+            clean_text_file = output_dir / f"{story_title}_Clean.txt"
+            with open(clean_text_file, 'w', encoding='utf-8') as f:
+                f.write(audio_text)
+            logger.info(f"Clean text for audio verification saved to {clean_text_file}")
+
+            # Generate audio from the clean text
+            audio_file = output_dir / f"{story_title}_Audiobook.wav"
+            generate_audio(audio_text, str(audio_file))
         else:
-            logger.error("Story generation failed: empty content.")
+            logger.error("Story generation failed: empty content returned.")
+
     except Exception as e:
-        logger.error(f"Main execution failed: {e}")
+        logger.error(f"Main execution failed: {e}", exc_info=True)
         raise
 
 if __name__ == "__main__":
     try:
-        #generate_audio(text=open('story.md', 'r',encoding='utf-8').read())
         main()
     except Exception as e:
-        logger.error(f"Script failed: {e}")
+        logger.error(f"Script failed with critical error: {e}")
         exit(1)
