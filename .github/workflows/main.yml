@@ -62,7 +62,16 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python horror_generator.py
+        run: python horror_generator.py > outputs/script.log 2>&1
+
+      - name: Send logs to Telegram
+        if: always()
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          message: "Horror generator logs"
+          document: outputs/script.log
 
       - name: Upload story and audio
         if: success()
@@ -70,7 +79,7 @@ jobs:
         with:
           name: horror-series-outputs
           path: outputs/
-          if-no-files-found: error # Fail if no files are found to ensure clarity
+          if-no-files-found: error
 
       - name: Send story to Telegram
         if: success()
@@ -79,10 +88,7 @@ jobs:
           to: ${{ secrets.TELEGRAM_CHAT_ID }}
           token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           message: "New horror story generated: ${{ github.event.repository.name }}"
-          document: outputs/*.md # Send all Markdown files in outputs/
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          document: outputs/*.md
 
       - name: Clean up
         if: always()
