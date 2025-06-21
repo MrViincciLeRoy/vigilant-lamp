@@ -272,12 +272,14 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
 
     story_prompt = """
-# Shadows of Justice
-Protagonist: Detective Naledi Mokoena, a fierce black woman seeking justice.
-Antagonist: A serial predator targeting black women.
-Setting: The gritty streets of Pretoria.
-Crime: Abductions and murders of black women.
-Signature: A carved symbol left on the victims’ bodies.
+# Shadows of Pta
+
+Protagonist: Detective Naledi Mokoena, a fierce, deeply empathetic Black woman in her late 30s assigned to Pretoria’s Missing Persons Unit.
+Antagonist: A calculating predator who uses charm and deception to lure vulnerable women.
+Setting: The divided neighborhoods of greater Pretoria—from well-to-do suburbs to the hidden dangers of tucked-away township streets.
+Crime: A string of abductions and murders targeting young Black women. Each victim was last seen on a seemingly innocent “date” after meeting someone through social media or community connections.
+Signature: The perpetrator leaves no body—once reported missing, victims vanish without a trace. A single, curated item belonging to each woman (a shoe, an earring) is left conspicuously in their bedroom, along with an ominous carved symbol—an ancient spiral, scratched into a mirror or a wall.
+
 """
 
     try:
