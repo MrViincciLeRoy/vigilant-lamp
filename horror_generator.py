@@ -248,8 +248,50 @@ INSTRUCTIONS:
             'text': complete_story_text,
             'word_count': total_words,
         }
+def generate_audio(text: str, output_file: str = 'outputs/complete_narration.wav'):
+    """Generate audio narration."""
+    try:
+        print("Generating audio narration...")
+        os.makedirs('outputs', exist_ok=True)
+        
+        pipeline = kokoro.KPipeline(lang_code='a')
+        audio_segments = []
+        
+        # Split text into manageable chunks
+        sentences = text.split('. ')
+        chunk_size = 5  # Process 5 sentences at a time
+        
+        for i in range(0, len(sentences), chunk_size):
+            chunk = '. '.join(sentences[i:i+chunk_size])
+            if chunk:
+                generator = pipeline(chunk, voice='bm_fable')
+                
+                for j, (gs, ps, audio) in enumerate(generator):
+                    print(f"Processing audio chunk {i//chunk_size + 1}, segment {j}")
+                    if audio is not None and len(audio) > 0:
+                        audio_segments.append(audio)
 
-def generate_audio(text: str, output_file: str):
+        if audio_segments:
+            combined_audio = np.concatenate(audio_segments, axis=0)
+            sf.write(output_file, combined_audio, 24000)
+            duration = len(combined_audio) / 24000
+            print(f"Audio saved as '{output_file}' (Duration: {duration:.2f} seconds)")
+            return output_file
+        else:
+            print("No audio segments generated")
+            return None
+            
+    except AttributeError as e:
+        print(f"Error: Kokoro library issue - {e}. Ensure 'kokoro' is installed and supports KPipeline.")
+        return None
+    except FileNotFoundError as e:
+        print(f"Error: Missing model files - {e}. Ensure required files are available.")
+        return None
+    except Exception as e:
+        print(f"Error generating audio: {e}")
+        return None
+
+def __regenerate_audio(text: str, output_file: str):
     """Generates audio narration with Kokoro TTS and saves it as WAV."""
     logger.info("Generating audio narration...")
     try:
@@ -308,7 +350,7 @@ Signature: The perpetrator leaves no body—once reported missing, victims vanis
 
 if __name__ == "__main__":
     try:
-        main()
+        generate_audio(text=open('story.md', 'r',encoding='utf-8').read())
     except Exception as e:
         logger.error(f"Script failed: {e}")
         exit(1)
