@@ -7,6 +7,7 @@ from llama_cpp import Llama
 import numpy as np
 import soundfile as sf
 from kokoro import KPipeline
+import kokoro 
 import os
 
 # Set up logging to console
