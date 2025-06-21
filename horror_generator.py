@@ -1,52 +1,57 @@
-# -*- coding: utf-8 -*-
-import os
-import torch
-from huggingface_hub import hf_hub_download
-from llama_cpp import Llama
+import logging
+from pathlib import Path
+import re
 from typing import Dict, List, Optional
 import gc
-import kokoro
-import soundfile as sf
-import numpy as np
-import requests
-import re
-import json
+from llama_cpp import Llama
+from gtts import gTTS
 
-# --- MODEL LOADING (Optimized for CPU) ---
+# Set up logging to console for capture by GitHub Actions
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+# Load the Llama model with optimized parameters for resource constraints
 try:
-    print("Loading Llama model for story generation...")
+    logger.info("Loading Llama model...")
     llm = Llama.from_pretrained(
         repo_id="DavidAU/L3-Dark-Planet-8B-GGUF",
         filename="L3-Dark-Planet-8B-D_AU-IQ4_XS.gguf",
-        n_ctx=8192,
-        n_batch=512,
+        n_ctx=2048,  # Reduced context window
+        n_batch=128,  # Reduced batch size
         n_threads=None,
-        n_gpu_layers=0,
+        n_gpu_layers=0,  # Run on CPU
         verbose=False
     )
-    print("Model loaded successfully.")
+    logger.info("Model loaded successfully.")
 except Exception as e:
-    print(f"FATAL: Could not load the language model. Error: {e}")
-    llm = None
+    logger.error(f"Failed to load model: {e}")
+    raise
 
-# --- STORY GENERATOR CLASS ---
+def extract_story_idea_from_prompt(prompt_text: str) -> Dict[str, str]:
+    """Extracts story elements from a given prompt text."""
+    idea = {'title': 'Untitled Horror Story'}
+    lines = prompt_text.split('\n')
+    for line in lines:
+        if line.startswith('# '):
+            idea['title'] = line[2:].strip()
+        elif ':' in line:
+            key, value = line.split(':', 1)
+            key = key.strip().lower().replace(' ', '_').replace('-', '_')
+            idea[key] = value.strip()
+    return idea
+
 class KetchumStyleHorrorGenerator:
-    """
-    Generates horror stories with a six-act structure, each with four sections,
-    focusing on crimes against black women in Pretoria, in the style of Jack Ketchum.
-    """
+    """Generates horror stories in the style of Jack Ketchum with a six-act structure."""
     def __init__(self):
         self.llm = llm
         self.model_loaded = llm is not None
         self.section_summaries = []
         self.current_story_data = {}
-        self.total_target_words = 7200  # 6 acts * 4 sections * 300 words
-        self.health_threshold = 0.75    # Minimum acceptable word count ratio
+        self.total_target_words = 7200  # Total words for the entire story
+        self.health_threshold = 0.75    # Minimum word count ratio for section validation
 
     def create_story_structure(self, story_idea: Dict[str, str]) -> List[Dict[str, any]]:
-        """
-        Generates a six-act story structure with four sections per act.
-        """
+        """Defines the six-act story structure with four sections per act."""
         protagonist = story_idea.get('protagonist', 'a determined black female detective')
         antagonist = story_idea.get('antagonist', 'a ruthless killer')
         setting = story_idea.get('setting', 'Pretoria, South Africa')
@@ -67,57 +72,57 @@ class KetchumStyleHorrorGenerator:
             },
             {
                 "act": 2,
-                "title": "Investigation",
-                "description": "The protagonist digs deeper into the case.",
+                "title": "The Hunt Begins",
+                "description": "The protagonist starts tracking the antagonist.",
                 "sections": [
-                    {"section": 1, "title": "Gathering Clues", "description": f"{protagonist} uncovers evidence linking {crime} to broader issues affecting black women.", "target_words": 300},
-                    {"section": 2, "title": "Obstacles", "description": f"Roadblocks emerge, such as community distrust or police corruption in {setting}.", "target_words": 300},
-                    {"section": 3, "title": "Breakthrough", "description": f"A key clue or witness points {protagonist} toward {antagonist}.", "target_words": 300},
-                    {"section": 4, "title": "Escalation", "description": f"The stakes rise as {antagonist} strikes again, targeting another black woman.", "target_words": 300}
+                    {"section": 1, "title": "Gathering Clues", "description": f"{protagonist} uncovers leads about {antagonist} in {setting}.", "target_words": 300},
+                    {"section": 2, "title": "First Encounter", "description": f"A tense near-miss with {antagonist} heightens the stakes.", "target_words": 300},
+                    {"section": 3, "title": "Allies and Obstacles", "description": f"{protagonist} recruits help but faces resistance.", "target_words": 300},
+                    {"section": 4, "title": "A Dark Revelation", "description": f"{protagonist} learns a disturbing truth about {signature}.", "target_words": 300}
                 ]
             },
             {
                 "act": 3,
-                "title": "Rising Action",
-                "description": "The investigation intensifies with greater risks.",
+                "title": "Descent into Darkness",
+                "description": "The investigation takes a toll.",
                 "sections": [
-                    {"section": 1, "title": "Deeper Probe", "description": f"{protagonist} connects {crime} to systemic violence against black women in {setting}.", "target_words": 300},
-                    {"section": 2, "title": "Personal Threat", "description": f"{antagonist} targets {protagonist} or someone close, making it personal.", "target_words": 300},
-                    {"section": 3, "title": "Increased Danger", "description": f"The danger escalates as {antagonist}’s actions grow bolder.", "target_words": 300},
-                    {"section": 4, "title": "Narrowing In", "description": f"{protagonist} closes in on {antagonist}, but key answers remain elusive.", "target_words": 300}
+                    {"section": 1, "title": "Personal Cost", "description": f"{protagonist} sacrifices something dear to pursue {antagonist}.", "target_words": 300},
+                    {"section": 2, "title": "Another Victim", "description": f"{antagonist} strikes again, leaving {signature}.", "target_words": 300},
+                    {"section": 3, "title": "Doubt Creeps In", "description": f"{protagonist} questions her methods in {setting}.", "target_words": 300},
+                    {"section": 4, "title": "A Lead Emerges", "description": f"A breakthrough offers hope amidst despair.", "target_words": 300}
                 ]
             },
             {
                 "act": 4,
-                "title": "Crisis",
-                "description": "A major setback challenges the protagonist.",
+                "title": "The Confrontation",
+                "description": "The protagonist closes in on the antagonist.",
                 "sections": [
-                    {"section": 1, "title": "Setback", "description": f"{protagonist} faces a loss—evidence destroyed or a false lead.", "target_words": 300},
-                    {"section": 2, "title": "Doubt", "description": f"Doubt creeps in as {protagonist} questions her ability to stop {antagonist}.", "target_words": 300},
-                    {"section": 3, "title": "Revelation", "description": f"A shocking truth about {crime} reframes the investigation.", "target_words": 300},
-                    {"section": 4, "title": "Regrouping", "description": f"{protagonist} regroups, finding new resolve to face {antagonist}.", "target_words": 300}
+                    {"section": 1, "title": "The Trap", "description": f"{protagonist} sets a plan to catch {antagonist}.", "target_words": 300},
+                    {"section": 2, "title": "Ambush", "description": f"A violent clash erupts in {setting}.", "target_words": 300},
+                    {"section": 3, "title": "Escape", "description": f"{antagonist} slips away, leaving {signature}.", "target_words": 300},
+                    {"section": 4, "title": "Aftermath", "description": f"{protagonist} regroups, more determined than ever.", "target_words": 300}
                 ]
             },
             {
                 "act": 5,
-                "title": "Climax",
-                "description": "The protagonist confronts the antagonist.",
+                "title": "The Final Pursuit",
+                "description": "The chase reaches its climax.",
                 "sections": [
-                    {"section": 1, "title": "Confrontation", "description": f"{protagonist} faces {antagonist} in a tense showdown.", "target_words": 300},
-                    {"section": 2, "title": "The Truth", "description": f"The motives behind {crime} and {signature} are fully revealed.", "target_words": 300},
-                    {"section": 3, "title": "Struggle", "description": f"A brutal struggle ensues as {protagonist} fights for justice.", "target_words": 300},
-                    {"section": 4, "title": "Resolution", "description": f"The conflict ends—{antagonist} is stopped or escapes.", "target_words": 300}
+                    {"section": 1, "title": "Cornered", "description": f"{protagonist} tracks {antagonist} to a deadly location in {setting}.", "target_words": 300},
+                    {"section": 2, "title": "Revelation", "description": f"{antagonist}’s motives tied to {signature} are revealed.", "target_words": 300},
+                    {"section": 3, "title": "The Fight", "description": f"A brutal showdown tests {protagonist}’s limits.", "target_words": 300},
+                    {"section": 4, "title": "Victory or Defeat", "description": f"The outcome hangs in the balance.", "target_words": 300}
                 ]
             },
             {
                 "act": 6,
                 "title": "Resolution",
-                "description": "The aftermath and reflection on the events.",
+                "description": "The story concludes with lasting impact.",
                 "sections": [
-                    {"section": 1, "title": "Aftermath", "description": f"The immediate fallout of {crime} affects {protagonist} and {setting}.", "target_words": 300},
-                    {"section": 2, "title": "Reflection", "description": f"{protagonist} reflects on the toll of fighting crimes against black women.", "target_words": 300},
-                    {"section": 3, "title": "Closure", "description": f"Loose ends tie up, offering {protagonist} some peace.", "target_words": 300},
-                    {"section": 4, "title": "Epilogue", "description": f"A glimpse into the future impact on {protagonist} and the community.", "target_words": 300}
+                    {"section": 1, "title": "The End", "description": f"{protagonist} faces the consequences of confronting {antagonist}.", "target_words": 300},
+                    {"section": 2, "title": "Reflection", "description": f"{protagonist} contemplates justice in {setting}.", "target_words": 300},
+                    {"section": 3, "title": "The Mark Remains", "description": f"{signature} lingers as a haunting reminder.", "target_words": 300},
+                    {"section": 4, "title": "A New Beginning", "description": f"{protagonist} moves forward, changed forever.", "target_words": 300}
                 ]
             }
         ]
@@ -132,7 +137,7 @@ class KetchumStyleHorrorGenerator:
         return "PREVIOUSLY IN THE STORY:\n" + "\n".join(relevant_summaries)
 
     def generate_section(self, act_num: int, section_num: int, section_data: Dict[str, str]) -> str:
-        """Generates a single section with a detailed prompt."""
+        """Generates a single section of the story."""
         if not self.model_loaded:
             return "[Error: Model not loaded]"
 
@@ -170,7 +175,8 @@ INSTRUCTIONS:
 - Avoid headers or meta-commentary in the text.
 - Begin writing now.
 """
-        print(f"Generating Act {act_num}, Section {section_num}: '{title}'...")
+
+        logger.info(f"Generating Act {act_num}, Section {section_num}: '{title}'...")
         try:
             output = self.llm(
                 prompt,
@@ -185,41 +191,41 @@ INSTRUCTIONS:
 
             if self._validate_section(section_text, target_words):
                 word_count = len(section_text.split())
-                print(f"  ✓ Act {act_num}, Section {section_num} completed ({word_count} words).")
+                logger.info(f"  ✓ Act {act_num}, Section {section_num} completed ({word_count} words).")
                 summary = f"In Act {act_num}, Section {section_num}, {description}"
                 self.section_summaries.append(summary)
                 return section_text
             else:
-                print(f"  ✗ Act {act_num}, Section {section_num} failed quality check.")
+                logger.warning(f"  ✗ Act {act_num}, Section {section_num} failed quality check.")
                 return "[Error: Section generation failed quality validation]"
 
         except Exception as e:
-            print(f"  ✗ Error during generation: {e}")
+            logger.error(f"  ✗ Error during generation: {e}")
             return f"[Error: Could not generate Act {act_num}, Section {section_num}]"
 
     def _clean_text(self, text: str) -> str:
-        """Cleans up the model’s output."""
+        """Cleans up the generated text by removing unwanted lines."""
         text = text.strip()
         lines = text.split('\n')
         cleaned_lines = [line for line in lines if not re.match(r'^(WRITING STYLE|INSTRUCTIONS|SECTION|You are|STORY TITLE)', line, re.IGNORECASE)]
         return '\n\n'.join(cleaned_lines).strip()
 
     def _validate_section(self, section_text: str, target_words: int) -> bool:
-        """Ensures the section meets quality standards."""
+        """Validates if the section meets the word count requirement."""
         if not section_text or section_text.startswith("[Error"):
             return False
         word_count = len(section_text.split())
         if word_count < target_words * self.health_threshold:
-            print(f"    - Validation failed: Word count ({word_count}) below threshold.")
+            logger.warning(f"    - Validation failed: Word count ({word_count}) below threshold.")
             return False
         return True
 
     def generate_complete_story(self, story_idea: Dict[str, str]) -> Dict[str, any]:
-        """Generates a full six-act story with four sections per act."""
+        """Generates the complete six-act story."""
         if not self.model_loaded:
             raise ConnectionError("Cannot generate story: model not loaded.")
 
-        print(f"\n=== Generating New Horror Story: '{story_idea['title']}' ===")
+        logger.info(f"\n=== Generating New Horror Story: '{story_idea['title']}' ===")
         self.current_story_data = story_idea
         self.section_summaries = []
 
@@ -244,8 +250,8 @@ INSTRUCTIONS:
 
         complete_story_text = "".join(full_story_sections)
 
-        print("\n=== Story Generation Complete ===")
-        print(f"Final Word Count: {total_words} / {self.total_target_words}")
+        logger.info("\n=== Story Generation Complete ===")
+        logger.info(f"Final Word Count: {total_words} / {self.total_target_words}")
 
         return {
             'title': story_idea['title'],
@@ -253,76 +259,22 @@ INSTRUCTIONS:
             'word_count': total_words,
         }
 
-# --- UTILITY FUNCTIONS ---
-def extract_story_idea_from_prompt(prompt_text: str) -> Dict[str, str]:
-    """Extracts story elements from a prompt."""
-    idea = {'title': 'Untitled Horror Story'}
-    lines = prompt_text.split('\n')
-    for line in lines:
-        if line.startswith('# '):
-            idea['title'] = line[2:].strip()
-        elif ':' in line:
-            key, value = line.split(':', 1)
-            key = key.strip().lower().replace(' ', '_').replace('-', '_')
-            idea[key] = value.strip()
-    return idea
-
-def save_story(story: Dict[str, any], output_dir: str = 'outputs') -> None:
-    """Saves the story as a Markdown file with act and section headings."""
-    os.makedirs(output_dir, exist_ok=True)
-    safe_title = re.sub(r'[^\w\s-]', '', story['title']).strip().replace(' ', '_')
-    filename = os.path.join(output_dir, f"{safe_title}.md")
-    with open(filename, 'w', encoding='utf-8') as f:
-        f.write(f"# {story['title']}\n\n")
-        f.write(f"**Word Count:** {story['word_count']}\n\n")
-        f.write(story['text'])
-    print(f"Story successfully saved to: {filename}")
-
-def generate_audio(text: str, output_file: str = 'outputs/complete_narration.wav'):
-    """Generate audio narration."""
+def generate_audio(text: str, output_file: str):
+    """Generates audio narration for the given text using gTTS."""
+    logger.info("Generating audio narration...")
     try:
-        print("Generating audio narration...")
-        os.makedirs('outputs', exist_ok=True)
-        
-        pipeline = kokoro.KPipeline(lang_code='a')
-        audio_segments = []
-        
-        # Split text into manageable chunks
-        sentences = text.split('. ')
-        chunk_size = 5  # Process 5 sentences at a time
-        
-        for i in range(0, len(sentences), chunk_size):
-            chunk = '. '.join(sentences[i:i+chunk_size])
-            if chunk:
-                generator = pipeline(chunk, voice='bm_fable')
-                
-                for j, (gs, ps, audio) in enumerate(generator):
-                    print(f"Processing audio chunk {i//chunk_size + 1}, segment {j}")
-                    if audio is not None and len(audio) > 0:
-                        audio_segments.append(audio)
-
-        if audio_segments:
-            combined_audio = np.concatenate(audio_segments, axis=0)
-            sf.write(output_file, combined_audio, 24000)
-            duration = len(combined_audio) / 24000
-            print(f"Audio saved as '{output_file}' (Duration: {duration:.2f} seconds)")
-            return output_file
-        else:
-            print("No audio segments generated")
-            return None
-            
-    except AttributeError as e:
-        print(f"Error: Kokoro library issue - {e}. Ensure 'kokoro' is installed and supports KPipeline.")
-        return None
-    except FileNotFoundError as e:
-        print(f"Error: Missing model files - {e}. Ensure required files are available.")
-        return None
+        tts = gTTS(text, lang='en')
+        tts.save(output_file)
+        logger.info(f"Audio saved to {output_file}")
     except Exception as e:
-        print(f"Error generating audio: {e}")
-        return None
+        logger.error(f"Failed to generate audio: {e}")
+        raise
 
-# --- MAIN EXECUTION BLOCK ---
-if __name__ == "__main__":
+def main():
+    """Main function to generate the story and audio."""
+    output_dir = Path('outputs')
+    output_dir.mkdir(parents=True, exist_ok=True)
+
     story_prompt = """
 # Shadows of Justice
 Protagonist: Detective Naledi Mokoena, a fierce black woman seeking justice.
@@ -331,19 +283,34 @@ Setting: The gritty streets of Pretoria.
 Crime: Abductions and murders of black women.
 Signature: A carved symbol left on the victims’ bodies.
 """
+
     try:
-        generator = KetchumStyleHorrorGenerator()
+        logger.info("Extracting story idea...")
         story_idea = extract_story_idea_from_prompt(story_prompt)
+        logger.info("Story idea extracted.")
+
+        generator = KetchumStyleHorrorGenerator()
+        logger.info("Generating story...")
         final_story = generator.generate_complete_story(story_idea)
         if final_story and final_story['word_count'] > 0:
-            save_story(final_story)
-            # Compute the safe filename outside the f-string to avoid backslash issue
-            safe_title = re.sub(r'[^\w\s-]', '', final_story['title']).strip().replace(' ', '_')
-            output_file = os.path.join('outputs', f"{safe_title}_Audiobook.wav")
-            generate_audio(final_story['text'], output_file=output_file)
+            story_file = output_dir / f"{final_story['title'].replace(' ', '_')}.md"
+            with open(story_file, 'w', encoding='utf-8') as f:
+                f.write(f"# {final_story['title']}\n\n")
+                f.write(f"**Word Count:** {final_story['word_count']}\n\n")
+                f.write(final_story['text'])
+            logger.info(f"Story saved to {story_file}")
+
+            audio_file = output_dir / f"{final_story['title'].replace(' ', '_')}_Audiobook.mp3"
+            generate_audio(final_story['text'], str(audio_file))
         else:
-            print("Story generation failed: empty content.")
+            logger.error("Story generation failed: empty content.")
     except Exception as e:
-        print(f"\nFatal error: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"Main execution failed: {e}")
+        raise
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as e:
+        logger.error(f"Script failed: {e}")
+        exit(1)
