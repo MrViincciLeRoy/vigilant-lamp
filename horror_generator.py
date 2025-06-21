@@ -253,7 +253,7 @@ def generate_audio(text: str, output_file: str):
     """Generates audio narration with Kokoro TTS and saves it as WAV."""
     logger.info("Generating audio narration...")
     try:
-        pipeline = KPipeline(lang_code='en')
+        pipeline = KPipeline(lang_code='a')
         audio_segments = []
         for i, (gs, ps, audio) in enumerate(pipeline(text, voice='en_heart')):
             audio_segments.append(audio)
