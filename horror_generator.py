@@ -352,7 +352,8 @@ Signature: The perpetrator leaves no body—once reported missing, victims vanis
 
 if __name__ == "__main__":
     try:
-        generate_audio(text=open('story.md', 'r',encoding='utf-8').read())
+        #generate_audio(text=open('story.md', 'r',encoding='utf-8').read())
+        main()
     except Exception as e:
         logger.error(f"Script failed: {e}")
         exit(1)
