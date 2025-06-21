@@ -4,7 +4,11 @@ import re
 from typing import Dict, List, Optional
 import gc
 from llama_cpp import Llama
-from gtts import gTTS
+import numpy as np
+import soundfile as sf
+from kokoro import KPipeline
+from pydub import AudioSegment
+import tempfile
 
 # Set up logging to console for capture by GitHub Actions
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -260,11 +264,21 @@ INSTRUCTIONS:
         }
 
 def generate_audio(text: str, output_file: str):
-    """Generates audio narration for the given text using gTTS."""
-    logger.info("Generating audio narration...")
+    """Generates audio narration for the given text using Kokoro TTS."""
+    logger.info("Generating audio narration with Kokoro...")
     try:
-        tts = gTTS(text, lang='en')
-        tts.save(output_file)
+        pipeline = KPipeline(lang_code='en')
+        audio_segments = []
+        for i, (gs, ps, audio) in enumerate(pipeline(text, voice='en_heart')):
+            audio_segments.append(audio)
+        if not audio_segments:
+            raise ValueError("No audio segments generated.")
+        concatenated_audio = np.concatenate(audio_segments)
+        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_wav:
+            sf.write(temp_wav.name, concatenated_audio, 24000)
+            temp_wav_path = temp_wav.name
+        AudioSegment.from_wav(temp_wav_path).export(output_file, format='mp3')
+        Path(temp_wav_path).unlink()  # Remove temporary file
         logger.info(f"Audio saved to {output_file}")
     except Exception as e:
         logger.error(f"Failed to generate audio: {e}")
