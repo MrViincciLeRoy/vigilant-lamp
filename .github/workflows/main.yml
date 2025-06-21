@@ -90,14 +90,7 @@ jobs:
           message: "New horror story generated: ${{ github.event.repository.name }}"
           document: outputs/*.md
 
-      - name: Send audio to Telegram
-        if: success()
-        uses: appleboy/telegram-action@master
-        with:
-          to: ${{ secrets.TELEGRAM_CHAT_ID }}
-          token: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          message: "New horror story audio generated: ${{ github.event.repository.name }}"
-          document: outputs/*.wav
+      
 
       - name: Clean up
         if: always()
