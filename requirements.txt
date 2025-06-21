@@ -1,5 +1,5 @@
 # Python Dependencies for Horror Generator
-
+gtts
 torch
 transformers
 llama-cpp-python==0.2.79
