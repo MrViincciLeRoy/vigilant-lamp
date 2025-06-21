@@ -255,7 +255,7 @@ def generate_audio(text: str, output_file: str = 'outputs/complete_narration.wav
         print("Generating audio narration...")
         os.makedirs('outputs', exist_ok=True)
         
-        pipeline = kokoro.KPipeline(lang_code='a')
+        pipeline = KPipeline(lang_code='a')
         audio_segments = []
         
         # Split text into manageable chunks
