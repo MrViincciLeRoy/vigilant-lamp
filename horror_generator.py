@@ -19,7 +19,125 @@ import time
 # Telegram Configuration
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')  # Replace with your bot token
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')    # Replace with your chat ID
+def send_audio_file_to_telegram(bot_token: str, chat_id: str, audio_file_path: str, title: str):
+    """Send the audio file to Telegram with upload progress."""
+    try:
+        logger.info(f"Preparing to send audio file to Telegram: {audio_file_path}")
+        
+        if not os.path.exists(audio_file_path):
+            logger.error(f"Audio file not found: {audio_file_path}")
+            return False
 
+        # Get file size for progress tracking
+        file_size = os.path.getsize(audio_file_path)
+        file_size_mb = file_size / (1024 * 1024)
+        
+        logger.info(f"Audio file size: {file_size_mb:.2f} MB")
+
+        # Check if file is too large (Telegram limit is 50MB for bots)
+        if file_size > 50 * 1024 * 1024:  # 50MB limit
+            logger.warning(f"File too large for Telegram ({file_size_mb:.2f} MB). Maximum is 50MB.")
+            
+            # Send notification about file being too large
+            message = f"🎵 *Audio File Ready*\n\n"
+            message += f"*Title:* {title}\n"
+            message += f"*Size:* {file_size_mb:.2f} MB\n"
+            message += f"*Status:* ❌ File too large for Telegram (max 50MB)\n"
+            message += f"*Location:* {audio_file_path}\n"
+            message += f"*Time:* {datetime.now().strftime('%H:%M:%S')}"
+
+            url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+            payload = {
+                'chat_id': chat_id,
+                'text': message,
+                'parse_mode': 'Markdown'
+            }
+            requests.post(url, json=payload, timeout=10)
+            return False
+
+        # Send upload start notification
+        start_message = f"🎵 *Uploading Audio File*\n\n"
+        start_message += f"*Title:* {title}\n"
+        start_message += f"*Size:* {file_size_mb:.2f} MB\n"
+        start_message += f"*Status:* Uploading to Telegram...\n"
+        start_message += f"*Time:* {datetime.now().strftime('%H:%M:%S')}"
+
+        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        payload = {
+            'chat_id': chat_id,
+            'text': start_message,
+            'parse_mode': 'Markdown'
+        }
+        requests.post(url, json=payload, timeout=10)
+
+        # Upload the audio file
+        url = f"https://api.telegram.org/bot{bot_token}/sendAudio"
+        
+        with open(audio_file_path, 'rb') as audio_file:
+            files = {
+                'audio': (os.path.basename(audio_file_path), audio_file, 'audio/wav')
+            }
+            
+            data = {
+                'chat_id': chat_id,
+                'title': title,
+                'caption': f"🎵 *{title}* - Horror Story Audiobook\n\n📊 File size: {file_size_mb:.2f} MB\n⏱️ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+                'parse_mode': 'Markdown'
+            }
+
+            logger.info("Uploading audio file to Telegram...")
+            
+            # Use a longer timeout for large file uploads
+            timeout = max(300, int(file_size_mb * 10))  # At least 5 minutes, more for larger files
+            response = requests.post(url, files=files, data=data, timeout=timeout)
+
+            if response.ok:
+                logger.info("✅ Audio file successfully sent to Telegram!")
+                return True
+            else:
+                logger.error(f"Failed to send audio file: {response.status_code} - {response.text}")
+                
+                # Send error notification
+                error_message = f"🎵 *Audio Upload Failed*\n\n"
+                error_message += f"*Title:* {title}\n"
+                error_message += f"*Error:* {response.status_code} - Upload failed\n"
+                error_message += f"*File Location:* {audio_file_path}\n"
+                error_message += f"*Time:* {datetime.now().strftime('%H:%M:%S')}"
+
+                url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+                payload = {
+                    'chat_id': chat_id,
+                    'text': error_message,
+                    'parse_mode': 'Markdown'
+                }
+                requests.post(url, json=payload, timeout=10)
+                return False
+
+    except requests.exceptions.Timeout:
+        logger.error("Timeout while uploading audio file to Telegram")
+        
+        # Send timeout notification
+        timeout_message = f"🎵 *Audio Upload Timeout*\n\n"
+        timeout_message += f"*Title:* {title}\n"
+        timeout_message += f"*Status:* Upload timed out (file may be too large)\n"
+        timeout_message += f"*File Location:* {audio_file_path}\n"
+        timeout_message += f"*Time:* {datetime.now().strftime('%H:%M:%S')}"
+
+        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        payload = {
+            'chat_id': chat_id,
+            'text': timeout_message,
+            'parse_mode': 'Markdown'
+        }
+        try:
+            requests.post(url, json=payload, timeout=10)
+        except:
+            pass
+        return False
+        
+    except Exception as e:
+        logger.error(f"Error sending audio file to Telegram: {e}")
+        return False
 class TelegramLogHandler(logging.Handler):
     """Custom logging handler that sends logs to Telegram."""
     
@@ -330,20 +448,20 @@ class SuburbanHorrorGenerator:
         return f"{char_context}\n{plot_context}{recent_text}"
 
     def generate_section(self, act_num: int, section_num: int, section_data: Dict[str, str]) -> str:
-        """Generates a single story section."""
+        """Generates a single story section with retry logic if word count is insufficient."""
         if not self.model_loaded:
             return "[Error: Model not loaded]"
-
+    
         title = section_data["title"]
         description = section_data["description"]
         target_words = section_data["target_words"]
-
+    
         # Send progress update to Telegram
         if telegram_handler:
             story_title = self.current_story_data.get('title', 'Unknown Story')
             progress_msg = f"Writing Act {act_num}, Section {section_num}: {title}"
             send_telegram_progress(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, story_title, progress_msg, f"Target: {target_words} words")
-
+    
         horror_style_guide = (
             "WRITING STYLE: Suburban Psychological Horror (like 'The Girl Next Door'):\n"
             "- Focus on the horror hidden beneath suburban normalcy.\n"
@@ -354,62 +472,61 @@ class SuburbanHorrorGenerator:
             "- Use realistic dialogue and believable character motivations.\n"
             "- Show how evil can flourish when good people do nothing."
         )
-
+    
         context = self._build_focused_context()
-
+    
         prompt = f"""
-You are continuing a psychological horror story in the style of "The Girl Next Door". This must flow seamlessly from the previous section.
-
-STORY TITLE: "{self.current_story_data['title']}"
-{context}
-
-CURRENT SECTION: Act {act_num}, Section {section_num} - {title}
-SECTION GOAL: {description}
-
-{horror_style_guide}
-
-CRITICAL INSTRUCTIONS:
-- Write ~{target_words} words that flow DIRECTLY from where the last section ended.
-- If there was previous text, continue the narrative smoothly - don't restart or summarize.
-- Maintain the same characters, their personalities, and the established tone.
-- Keep the same POV and narrative voice throughout.
-- Advance the plot toward the section goal while maintaining story flow.
-- NO section headers, titles, or meta-commentary in the story text.
-- Write as if this is one continuous story, not separate sections.
-- Begin writing the continuation now:
-"""
-
+    You are continuing a psychological horror story in the style of "The Girl Next Door". This must flow seamlessly from the previous section.
+    
+    STORY TITLE: "{self.current_story_data['title']}"
+    {context}
+    
+    CURRENT SECTION: Act {act_num}, Section {section_num} - {title}
+    SECTION GOAL: {description}
+    
+    {horror_style_guide}
+    
+    CRITICAL INSTRUCTIONS:
+    - Write ~{target_words} words that flow DIRECTLY from where the last section ended.
+    - If there was previous text, continue the narrative smoothly - don't restart or summarize.
+    - Maintain the same characters, their personalities, and the established tone.
+    - Keep the same POV and narrative voice throughout.
+    - Advance the plot toward the section goal while maintaining story flow.
+    - NO section headers, titles, or meta-commentary in the story text.
+    - Write as if this is one continuous story, not separate sections.
+    - Begin writing the continuation now:
+    """
+    
         logger.info(f"Generating Act {act_num}, Section {section_num}: '{title}'...")
-        try:
-            output = self.llm(
-                prompt,
-                max_tokens=int(target_words * 1.3),  # Slightly more tokens for better completion
-                temperature=0.5,  # Lower temperature for more consistent narrative
-                top_p=0.85,  # More focused generation
-                repeat_penalty=1.1,  # Less aggressive to maintain flow
-                stop=["\n\n\n\n", "---", "## Act", "### Section", "CHAPTER", "THE END"],
-                echo=False
-            )
-            section_text = self._clean_text(output['choices'][0]['text'])
-
-            if self._validate_section(section_text, target_words):
-                word_count = len(section_text.split())
-                logger.info(f"  ✓ Act {act_num}, Section {section_num} completed ({word_count} words).")
-                
-                # Store this section for continuity in next section
-                self.previous_section_text = section_text
-                
-                # Create more detailed summary for story progression
-                summary = f"Act {act_num}-{section_num} ({title}): {description[:100]}..."
-                self.section_summaries.append(summary)
-                return section_text
-            else:
-                logger.warning(f"  ✗ Act {act_num}, Section {section_num} failed quality check.")
-                return "[Error: Section generation failed]"
-
-        except Exception as e:
-            logger.error(f"  ✗ Error: {e}")
-            return f"[Error: Could not generate Act {act_num}, Section {section_num}]"
+        max_attempts = 3
+        for attempt in range(max_attempts):
+            try:
+                output = self.llm(
+                    prompt,
+                    max_tokens=int(target_words * 1.3),  # Slightly more tokens for better completion
+                    temperature=0.5,  # Lower temperature for more consistent narrative
+                    top_p=0.85,  # More focused generation
+                    repeat_penalty=1.1,  # Less aggressive to maintain flow
+                    stop=["\n\n\n\n", "---", "## Act", "### Section", "CHAPTER", "THE END"],
+                    echo=False
+                )
+                section_text = self._clean_text(output['choices'][0]['text'])
+    
+                if self._validate_section(section_text, target_words):
+                    word_count = len(section_text.split())
+                    logger.info(f"  ✓ Act {act_num}, Section {section_num} completed ({word_count} words) after {attempt + 1} attempt(s).")
+                    self.previous_section_text = section_text
+                    summary = f"Act {act_num}-{section_num} ({title}): {description[:100]}..."
+                    self.section_summaries.append(summary)
+                    return section_text
+                else:
+                    word_count = len(section_text.split())
+                    logger.warning(f"  ✗ Attempt {attempt + 1}: Section too short ({word_count} words), retrying...")
+            except Exception as e:
+                logger.error(f"  ✗ Error during attempt {attempt + 1}: {e}")
+    
+        logger.error(f"Failed to generate Act {act_num}, Section {section_num} after {max_attempts} attempts")
+        return f"[Error: Could not generate Act {act_num}, Section {section_num}]"
 
     def _clean_text(self, text: str) -> str:
         """
@@ -573,7 +690,7 @@ def generate_audio(text: str, output_file: str = 'outputs/complete_narration.wav
     except Exception as e:
         logger.error(f"Error generating audio: {e}", exc_info=True)
         return None
-
+        
 def main():
     """Main function to generate story and audio."""
     output_dir = Path('outputs')
@@ -619,13 +736,18 @@ Secret: The Chandlers are systematically torturing and abusing Meg, while the en
             logger.info(f"Clean text for audio verification saved to {clean_text_file}")
 
             # Generate audio from the clean text
-            audio_file = output_dir / f"{story_title}_Audiobook.wav"
-            generate_audio(audio_text, str(audio_file))
-            
+            audio_file_path = str(output_dir / f"{story_title}_Audiobook.wav")
+            audio_file = generate_audio(audio_text, audio_file_path)
+
+            # Send audio file via Telegram if generated successfully
+            if audio_file and telegram_handler:
+                logger.info(f"Audio file generated: {audio_file}")
+                send_audio_file_to_telegram(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, audio_file, final_story['title'])
+
             # Send final completion message
             if telegram_handler:
                 send_telegram_progress(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, final_story['title'], "🎉 All tasks completed!", f"Story: {final_story['word_count']} words, Audio generated")
-                
+
         else:
             logger.error("Story generation failed: empty content returned.")
 
