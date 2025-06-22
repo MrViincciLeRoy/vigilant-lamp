@@ -9,10 +9,185 @@ import soundfile as sf
 from kokoro import KPipeline
 import kokoro 
 import os
+import requests
+import json
+from datetime import datetime
+import threading
+import queue
+import time
+
+# Telegram Configuration
+TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')  # Replace with your bot token
+TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')    # Replace with your chat ID
+
+class TelegramLogHandler(logging.Handler):
+    """Custom logging handler that sends logs to Telegram."""
+    
+    def __init__(self, bot_token: str, chat_id: str):
+        super().__init__()
+        self.bot_token = bot_token
+        self.chat_id = chat_id
+        self.url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        self.message_queue = queue.Queue()
+        self.worker_thread = None
+        self.stop_event = threading.Event()
+        self.start_worker()
+    
+    def start_worker(self):
+        """Start the background worker thread for sending messages."""
+        self.worker_thread = threading.Thread(target=self._message_worker, daemon=True)
+        self.worker_thread.start()
+    
+    def _message_worker(self):
+        """Background worker that sends queued messages to Telegram."""
+        while not self.stop_event.is_set():
+            try:
+                # Get message from queue with timeout
+                message = self.message_queue.get(timeout=1.0)
+                self._send_to_telegram(message)
+                self.message_queue.task_done()
+            except queue.Empty:
+                continue
+            except Exception as e:
+                print(f"Error in Telegram worker: {e}")
+    
+    def _send_to_telegram(self, message: str):
+        """Send a message to Telegram."""
+        try:
+            # Telegram has a 4096 character limit, so we need to split long messages
+            max_length = 4000  # Leave some buffer
+            
+            if len(message) <= max_length:
+                messages = [message]
+            else:
+                # Split message into chunks
+                messages = [message[i:i+max_length] for i in range(0, len(message), max_length)]
+            
+            for msg in messages:
+                payload = {
+                    'chat_id': self.chat_id,
+                    'text': msg,
+                    'parse_mode': 'Markdown'
+                }
+                
+                response = requests.post(self.url, json=payload, timeout=10)
+                
+                if not response.ok:
+                    print(f"Failed to send Telegram message: {response.status_code} - {response.text}")
+                
+                # Rate limiting - Telegram allows 30 messages per second
+                time.sleep(0.1)
+                
+        except requests.exceptions.RequestException as e:
+            print(f"Network error sending to Telegram: {e}")
+        except Exception as e:
+            print(f"Unexpected error sending to Telegram: {e}")
+    
+    def emit(self, record):
+        """Handle a log record by sending it to Telegram."""
+        try:
+            # Format the log message
+            log_entry = self.format(record)
+            
+            # Add emoji based on log level
+            emoji_map = {
+                'DEBUG': '🔍',
+                'INFO': 'ℹ️',
+                'WARNING': '⚠️',
+                'ERROR': '❌',
+                'CRITICAL': '🚨'
+            }
+            
+            emoji = emoji_map.get(record.levelname, 'ℹ️')
+            timestamp = datetime.now().strftime('%H:%M:%S')
+            
+            # Format message for Telegram
+            telegram_message = f"{emoji} *{record.levelname}* `{timestamp}`\n```\n{log_entry}\n```"
+            
+            # Queue the message for sending
+            self.message_queue.put(telegram_message)
+            
+        except Exception as e:
+            print(f"Error formatting log for Telegram: {e}")
+    
+    def close(self):
+        """Clean shutdown of the handler."""
+        self.stop_event.set()
+        if self.worker_thread and self.worker_thread.is_alive():
+            self.worker_thread.join(timeout=5.0)
+        super().close()
+
+def setup_telegram_logging(bot_token: str, chat_id: str):
+    """Set up Telegram logging integration."""
+    try:
+        # Test Telegram connection first
+        test_url = f"https://api.telegram.org/bot{bot_token}/getMe"
+        response = requests.get(test_url, timeout=10)
+        
+        if not response.ok:
+            print(f"Failed to connect to Telegram bot: {response.status_code}")
+            return None
+        
+        bot_info = response.json()
+        print(f"Connected to Telegram bot: {bot_info.get('result', {}).get('username', 'Unknown')}")
+        
+        # Create and configure the Telegram handler
+        telegram_handler = TelegramLogHandler(bot_token, chat_id)
+        telegram_handler.setLevel(logging.INFO)  # Only send INFO and above to Telegram
+        
+        # Create a formatter for Telegram messages
+        telegram_formatter = logging.Formatter('%(name)s - %(message)s')
+        telegram_handler.setFormatter(telegram_formatter)
+        
+        return telegram_handler
+        
+    except requests.exceptions.RequestException as e:
+        print(f"Network error connecting to Telegram: {e}")
+        return None
+    except Exception as e:
+        print(f"Error setting up Telegram logging: {e}")
+        return None
+
+def send_telegram_progress(bot_token: str, chat_id: str, title: str, progress: str, details: str = ""):
+    """Send a formatted progress update to Telegram."""
+    try:
+        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        
+        message = f"📖 *Story Generation Progress*\n\n"
+        message += f"*Title:* {title}\n"
+        message += f"*Status:* {progress}\n"
+        
+        if details:
+            message += f"*Details:* {details}\n"
+        
+        message += f"*Time:* {datetime.now().strftime('%H:%M:%S')}"
+        
+        payload = {
+            'chat_id': chat_id,
+            'text': message,
+            'parse_mode': 'Markdown'
+        }
+        
+        requests.post(url, json=payload, timeout=10)
+        
+    except Exception as e:
+        print(f"Error sending progress update: {e}")
 
 # Set up logging to console
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+# Add Telegram logging if tokens are configured
+telegram_handler = None
+if TELEGRAM_BOT_TOKEN != "YOUR_BOT_TOKEN_HERE" and TELEGRAM_CHAT_ID != "YOUR_CHAT_ID_HERE":
+    telegram_handler = setup_telegram_logging(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID)
+    if telegram_handler:
+        logger.addHandler(telegram_handler)
+        logger.info("🚀 Telegram logging enabled - Horror story generator starting!")
+    else:
+        logger.warning("Failed to enable Telegram logging - continuing with console only")
+else:
+    logger.info("Telegram tokens not configured - using console logging only")
 
 # Load the Llama model
 try:
@@ -44,8 +219,8 @@ def extract_story_idea_from_prompt(prompt_text: str) -> Dict[str, str]:
             idea[key] = value.strip()
     return idea
 
-class KetchumStyleHorrorGenerator:
-    """Generates horror stories in Jack Ketchum's style with a six-act structure."""
+class SuburbanHorrorGenerator:
+    """Generates 'Girl Next Door' style psychological horror stories with a six-act structure."""
     def __init__(self):
         self.llm = llm
         self.model_loaded = llm is not None
@@ -55,68 +230,66 @@ class KetchumStyleHorrorGenerator:
         self.health_threshold = 0.75    # Minimum word count ratio
 
     def create_story_structure(self, story_idea: Dict[str, str]) -> List[Dict[str, any]]:
-        """Defines a six-act story structure with four sections per act."""
-        protagonist = story_idea.get('protagonist', 'a determined black female detective')
-        antagonist = story_idea.get('antagonist', 'a ruthless killer')
-        setting = story_idea.get('setting', 'Pretoria, South Africa')
-        crime = story_idea.get('crime', 'a brutal murder of a black woman')
-        signature = story_idea.get('signature', 'a chilling mark left at the scene')
+        """Defines a six-act story structure with four sections per act for suburban psychological horror."""
+        protagonist = story_idea.get('protagonist', 'a curious teenage boy')
+        antagonist = story_idea.get('antagonist', 'seemingly normal neighbors')
+        setting = story_idea.get('setting', 'a quiet suburban neighborhood')
+        victim = story_idea.get('victim', 'the girl next door')
+        secret = story_idea.get('secret', 'a horrifying truth hidden in plain sight')
 
         acts = [
-            # The act structure remains the same as in your original code.
-            # ... (structure for Acts 1-6) ...
             {
-                "act": 1, "title": "The Crime", "description": "Introduces the crime and protagonist.",
+                "act": 1, "title": "Normal Life", "description": "Establishes the ordinary suburban setting and characters.",
                 "sections": [
-                    {"section": 1, "title": "Discovery", "description": f"The story opens with {protagonist} discovering {crime} in {setting}.", "target_words": 300},
-                    {"section": 2, "title": "Initial Investigation", "description": f"{protagonist} examines the scene, finding {signature}.", "target_words": 300},
-                    {"section": 3, "title": "The Decision", "description": f"{protagonist} resolves to pursue justice.", "target_words": 300},
-                    {"section": 4, "title": "First Steps", "description": f"{protagonist} begins investigating in {setting}.", "target_words": 300}
+                    {"section": 1, "title": "The Neighborhood", "description": f"Introduction to {setting} where {protagonist} lives a typical suburban life.", "target_words": 300},
+                    {"section": 2, "title": "Meeting the Girl", "description": f"{protagonist} encounters {victim} and is intrigued by her.", "target_words": 300},
+                    {"section": 3, "title": "Friendly Neighbors", "description": f"The {antagonist} appear to be model citizens in the community.", "target_words": 300},
+                    {"section": 4, "title": "First Curiosity", "description": f"{protagonist} begins to notice small, odd details about the house next door.", "target_words": 300}
                 ]
             },
             {
-                "act": 2, "title": "The Hunt Begins", "description": "The protagonist tracks the antagonist.",
+                "act": 2, "title": "Growing Suspicion", "description": "Strange observations pile up.",
                 "sections": [
-                    {"section": 1, "title": "Gathering Clues", "description": f"{protagonist} uncovers leads about {antagonist}.", "target_words": 300},
-                    {"section": 2, "title": "First Encounter", "description": f"A tense near-miss with {antagonist}.", "target_words": 300},
-                    {"section": 3, "title": "Allies and Obstacles", "description": f"{protagonist} recruits help but faces resistance.", "target_words": 300},
-                    {"section": 4, "title": "A Dark Revelation", "description": f"{protagonist} learns a truth about {signature}.", "target_words": 300}
+                    {"section": 1, "title": "Unusual Sounds", "description": f"{protagonist} hears disturbing noises coming from the neighbors' house at night.", "target_words": 300},
+                    {"section": 2, "title": "The Girl's Behavior", "description": f"{victim} shows signs of fear and distress that seem out of place.", "target_words": 300},
+                    {"section": 3, "title": "Adult Dismissal", "description": f"Adults refuse to believe {protagonist}'s concerns about the neighbors.", "target_words": 300},
+                    {"section": 4, "title": "Investigating Alone", "description": f"{protagonist} decides to investigate the strange occurrences independently.", "target_words": 300}
                 ]
             },
             {
-                "act": 3, "title": "Descent into Darkness", "description": "The investigation takes a toll.",
+                "act": 3, "title": "Horrible Discovery", "description": "The truth begins to emerge.",
                 "sections": [
-                    {"section": 1, "title": "Personal Cost", "description": f"{protagonist} sacrifices to pursue {antagonist}.", "target_words": 300},
-                    {"section": 2, "title": "Another Victim", "description": f"{antagonist} strikes again, leaving {signature}.", "target_words": 300},
-                    {"section": 3, "title": "Doubt Creeps In", "description": f"{protagonist} questions her methods.", "target_words": 300},
-                    {"section": 4, "title": "A Lead Emerges", "description": f"A breakthrough offers hope.", "target_words": 300}
+                    {"section": 1, "title": "Peeping In", "description": f"{protagonist} witnesses something disturbing through a window or basement.", "target_words": 300},
+                    {"section": 2, "title": "The Secret Room", "description": f"Discovery of a hidden space where {secret} is partially revealed.", "target_words": 300},
+                    {"section": 3, "title": "Moral Paralysis", "description": f"{protagonist} struggles with the horror of what they've seen and what to do.", "target_words": 300},
+                    {"section": 4, "title": "Failed Attempt", "description": f"An initial attempt to help {victim} goes wrong or is thwarted.", "target_words": 300}
                 ]
             },
             {
-                "act": 4, "title": "The Confrontation", "description": "The protagonist closes in.",
+                "act": 4, "title": "Deeper Into Hell", "description": "The full scope of the horror is revealed.",
                 "sections": [
-                    {"section": 1, "title": "The Trap", "description": f"{protagonist} sets a plan to catch {antagonist}.", "target_words": 300},
-                    {"section": 2, "title": "Ambush", "description": f"A violent clash erupts in {setting}.", "target_words": 300},
-                    {"section": 3, "title": "Escape", "description": f"{antagonist} slips away, leaving {signature}.", "target_words": 300},
-                    {"section": 4, "title": "Aftermath", "description": f"{protagonist} regroups, more determined.", "target_words": 300}
+                    {"section": 1, "title": "The Complete Truth", "description": f"The full extent of what {antagonist} are doing to {victim} is revealed.", "target_words": 300},
+                    {"section": 2, "title": "Community Complicity", "description": f"Other neighbors know about {secret} but choose to ignore it.", "target_words": 300},
+                    {"section": 3, "title": "Escalating Torture", "description": f"The abuse of {victim} becomes more severe and systematic.", "target_words": 300},
+                    {"section": 4, "title": "Trapped", "description": f"{protagonist} realizes they may be in danger for knowing too much.", "target_words": 300}
                 ]
             },
             {
-                "act": 5, "title": "The Final Pursuit", "description": "The chase reaches its climax.",
+                "act": 5, "title": "Breaking Point", "description": "Everything comes to a head.",
                 "sections": [
-                    {"section": 1, "title": "Cornered", "description": f"{protagonist} tracks {antagonist} to a deadly spot.", "target_words": 300},
-                    {"section": 2, "title": "Revelation", "description": f"{antagonist}’s motives tied to {signature} are revealed.", "target_words": 300},
-                    {"section": 3, "title": "The Fight", "description": f"A brutal showdown tests {protagonist}.", "target_words": 300},
-                    {"section": 4, "title": "Victory or Defeat", "description": f"The outcome hangs in the balance.", "target_words": 300}
+                    {"section": 1, "title": "Desperate Plan", "description": f"{protagonist} devises a risky plan to save {victim}.", "target_words": 300},
+                    {"section": 2, "title": "The Confrontation", "description": f"Direct confrontation with {antagonist} over their treatment of {victim}.", "target_words": 300},
+                    {"section": 3, "title": "Violence Erupts", "description": f"The suburban facade crumbles as violence breaks out.", "target_words": 300},
+                    {"section": 4, "title": "Life or Death", "description": f"A final struggle determines the fate of both {protagonist} and {victim}.", "target_words": 300}
                 ]
             },
             {
-                "act": 6, "title": "Resolution", "description": "The story concludes.",
+                "act": 6, "title": "Aftermath", "description": "The story concludes with lasting consequences.",
                 "sections": [
-                    {"section": 1, "title": "The End", "description": f"{protagonist} faces the consequences.", "target_words": 300},
-                    {"section": 2, "title": "Reflection", "description": f"{protagonist} contemplates justice.", "target_words": 300},
-                    {"section": 3, "title": "The Mark Remains", "description": f"{signature} lingers as a reminder.", "target_words": 300},
-                    {"section": 4, "title": "A New Beginning", "description": f"{protagonist} moves forward, changed.", "target_words": 300}
+                    {"section": 1, "title": "The Reckoning", "description": f"Authorities finally get involved and the truth comes to light.", "target_words": 300},
+                    {"section": 2, "title": "Damaged Lives", "description": f"The psychological toll on {protagonist} and {victim} is revealed.", "target_words": 300},
+                    {"section": 3, "title": "Suburban Scars", "description": f"The neighborhood is forever changed by the revelation of {secret}.", "target_words": 300},
+                    {"section": 4, "title": "Haunted Memory", "description": f"The lasting impact of the horror on all who survived it.", "target_words": 300}
                 ]
             }
         ]
@@ -124,27 +297,37 @@ class KetchumStyleHorrorGenerator:
 
     def _build_focused_context(self) -> str:
         """
-        FIXED: Builds context with key characters and recent plot points to improve consistency.
+        Builds comprehensive context with characters, plot, and recent text to maintain consistency.
         """
         # Persistent character context
-        protagonist = self.current_story_data.get('protagonist', 'A determined black female detective')
-        antagonist = self.current_story_data.get('antagonist', 'A ruthless killer')
-        
+        protagonist = self.current_story_data.get('protagonist', 'A curious teenage boy')
+        antagonist = self.current_story_data.get('antagonist', 'Seemingly normal neighbors')
+        victim = self.current_story_data.get('victim', 'The girl next door')
+        setting = self.current_story_data.get('setting', 'A quiet suburban neighborhood')
+
         char_context = (
-            "KEY CHARACTERS:\n"
+            "KEY CHARACTERS (maintain these throughout):\n"
             f"- Protagonist: {protagonist}\n"
             f"- Antagonist: {antagonist}\n"
+            f"- Victim: {victim}\n"
+            f"- Setting: {setting}\n"
         )
 
-        # Recent plot context
+        # Include more recent context for better continuity
         plot_context = ""
         if self.section_summaries:
-            num_to_include = min(3, len(self.section_summaries))
-            relevant_summaries = self.section_summaries[-num_to_include:]
-            plot_context = "PREVIOUSLY IN THE STORY:\n" + "\n".join(relevant_summaries)
+            plot_context = "STORY PROGRESSION:\n" + "\n".join(self.section_summaries)
+        
+        # Include the last written section to maintain narrative flow
+        recent_text = ""
+        if hasattr(self, 'previous_section_text') and self.previous_section_text:
+            # Get last few sentences for context
+            sentences = self.previous_section_text.split('.')
+            if len(sentences) > 2:
+                last_sentences = '. '.join(sentences[-3:]).strip()
+                recent_text = f"\nLAST WRITTEN TEXT (continue from here):\n...{last_sentences}"
 
-        return f"{char_context}\n{plot_context}"
-
+        return f"{char_context}\n{plot_context}{recent_text}"
 
     def generate_section(self, act_num: int, section_num: int, section_data: Dict[str, str]) -> str:
         """Generates a single story section."""
@@ -155,20 +338,27 @@ class KetchumStyleHorrorGenerator:
         description = section_data["description"]
         target_words = section_data["target_words"]
 
-        ketchum_style_guide = (
-            "WRITING STYLE: Emulate Jack Ketchum:\n"
-            "- Visceral realism with raw detail.\n"
-            "- Human-centered horror, no supernatural elements.\n"
-            "- Deep psychological exploration of characters.\n"
-            "- Steady tension with brutal honesty.\n"
-            "- Authentic Pretoria setting.\n"
-            "- Focus on black women’s experiences."
+        # Send progress update to Telegram
+        if telegram_handler:
+            story_title = self.current_story_data.get('title', 'Unknown Story')
+            progress_msg = f"Writing Act {act_num}, Section {section_num}: {title}"
+            send_telegram_progress(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, story_title, progress_msg, f"Target: {target_words} words")
+
+        horror_style_guide = (
+            "WRITING STYLE: Suburban Psychological Horror (like 'The Girl Next Door'):\n"
+            "- Focus on the horror hidden beneath suburban normalcy.\n"
+            "- Emphasize psychological tension over gore.\n"
+            "- Show the complicity of 'normal' people in evil.\n"
+            "- Build dread through mundane details that feel wrong.\n"
+            "- Explore themes of innocence lost and moral cowardice.\n"
+            "- Use realistic dialogue and believable character motivations.\n"
+            "- Show how evil can flourish when good people do nothing."
         )
 
         context = self._build_focused_context()
 
         prompt = f"""
-You are a horror writer like Jack Ketchum, crafting a story about crimes against black women in Pretoria.
+You are continuing a psychological horror story in the style of "The Girl Next Door". This must flow seamlessly from the previous section.
 
 STORY TITLE: "{self.current_story_data['title']}"
 {context}
@@ -176,25 +366,28 @@ STORY TITLE: "{self.current_story_data['title']}"
 CURRENT SECTION: Act {act_num}, Section {section_num} - {title}
 SECTION GOAL: {description}
 
-{ketchum_style_guide}
+{horror_style_guide}
 
-INSTRUCTIONS:
-- Write ~{target_words} words.
-- Advance the plot based on the goal.
-- Focus on new developments and character depth.
-- Avoid headers or meta-commentary.
-- Begin writing now.
+CRITICAL INSTRUCTIONS:
+- Write ~{target_words} words that flow DIRECTLY from where the last section ended.
+- If there was previous text, continue the narrative smoothly - don't restart or summarize.
+- Maintain the same characters, their personalities, and the established tone.
+- Keep the same POV and narrative voice throughout.
+- Advance the plot toward the section goal while maintaining story flow.
+- NO section headers, titles, or meta-commentary in the story text.
+- Write as if this is one continuous story, not separate sections.
+- Begin writing the continuation now:
 """
 
         logger.info(f"Generating Act {act_num}, Section {section_num}: '{title}'...")
         try:
             output = self.llm(
                 prompt,
-                max_tokens=int(target_words * 1.2),
-                temperature=0.5,
-                top_p=0.9,
-                repeat_penalty=1.15,
-                stop=["\n\n\n", "Section", "Act", "The End"],
+                max_tokens=int(target_words * 1.3),  # Slightly more tokens for better completion
+                temperature=0.5,  # Lower temperature for more consistent narrative
+                top_p=0.85,  # More focused generation
+                repeat_penalty=1.1,  # Less aggressive to maintain flow
+                stop=["\n\n\n\n", "---", "## Act", "### Section", "CHAPTER", "THE END"],
                 echo=False
             )
             section_text = self._clean_text(output['choices'][0]['text'])
@@ -202,7 +395,12 @@ INSTRUCTIONS:
             if self._validate_section(section_text, target_words):
                 word_count = len(section_text.split())
                 logger.info(f"  ✓ Act {act_num}, Section {section_num} completed ({word_count} words).")
-                summary = f"In Act {act_num}, Section {section_num}, {description}"
+                
+                # Store this section for continuity in next section
+                self.previous_section_text = section_text
+                
+                # Create more detailed summary for story progression
+                summary = f"Act {act_num}-{section_num} ({title}): {description[:100]}..."
                 self.section_summaries.append(summary)
                 return section_text
             else:
@@ -215,19 +413,17 @@ INSTRUCTIONS:
 
     def _clean_text(self, text: str) -> str:
         """
-        FIXED: Removes unwanted lines and artifacts, and attempts to fix encoding errors.
+        Removes unwanted lines and artifacts, and attempts to fix encoding errors.
         """
-        # Attempt to fix common encoding errors from model output (e.g., 'â€' should be '”')
+        # Attempt to fix common encoding errors from model output
         try:
-            # This sequence can fix text that was decoded with the wrong codec (e.g., UTF-8 as Latin-1)
             text = text.encode('latin1').decode('utf-8')
         except (UnicodeEncodeError, UnicodeDecodeError):
-            # If the text is already valid, this might fail, which is fine.
             pass
 
         text = text.strip()
-        
-        # Remove unwanted headers, instructions, and AI self-prompts.
+
+        # Remove unwanted headers, instructions, and AI self-prompts
         lines = text.split('\n')
         unwanted_patterns = re.compile(
             r'^(WRITING STYLE|INSTRUCTIONS|SECTION|You are|STORY TITLE|CURRENT SECTION|SECTION GOAL|PREVIOUSLY IN THE STORY|KEY CHARACTERS)|'
@@ -237,7 +433,7 @@ INSTRUCTIONS:
             re.IGNORECASE
         )
         cleaned_lines = [line for line in lines if not unwanted_patterns.match(line.strip())]
-        
+
         return '\n\n'.join(cleaned_lines).strip()
 
     def _validate_section(self, section_text: str, target_words: int) -> bool:
@@ -258,6 +454,11 @@ INSTRUCTIONS:
         logger.info(f"\n=== Generating Story: '{story_idea['title']}' ===")
         self.current_story_data = story_idea
         self.section_summaries = []
+        self.previous_section_text = ""  # Initialize for continuity
+
+        # Send start notification to Telegram
+        if telegram_handler:
+            send_telegram_progress(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, story_idea['title'], "Starting story generation", "6 acts, 24 sections total")
 
         story_structure = self.create_story_structure(story_idea)
         full_story_sections = []
@@ -266,22 +467,37 @@ INSTRUCTIONS:
         for act in story_structure:
             act_num = act['act']
             act_title = act['title']
-            full_story_sections.append(f"## Act {act_num}: {act_title}\n\n")
+            
+            logger.info(f"\n--- Starting Act {act_num}: {act_title} ---")
+            
+            # Only add act headers, not section headers for smoother flow
+            if act_num == 1:
+                # Start the story without any headers
+                pass
+            else:
+                # Add minimal act breaks for longer stories
+                full_story_sections.append(f"\n\n* * *\n\n")
+            
             for section in act['sections']:
                 section_num = section['section']
                 section_title = section['title']
                 section_text = self.generate_section(act_num, section_num, section)
                 if not section_text.startswith("[Error"):
-                    full_story_sections.append(f"### Section {section_num}: {section_title}\n\n{section_text}\n\n")
+                    # Add section text without headers to maintain flow
+                    full_story_sections.append(f"{section_text}\n\n")
                     total_words += len(section_text.split())
                 else:
-                    full_story_sections.append(f"### Section {section_num}: {section_title}\n\n_{section_text}_\n\n")
+                    full_story_sections.append(f"_{section_text}_\n\n")
                 gc.collect()
 
         complete_story_text = "".join(full_story_sections)
 
         logger.info("\n=== Story Generation Complete ===")
         logger.info(f"Final Word Count: {total_words} / {self.total_target_words}")
+
+        # Send completion notification to Telegram
+        if telegram_handler:
+            send_telegram_progress(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, story_idea['title'], "✅ Story generation completed!", f"Final word count: {total_words}")
 
         return {
             'title': story_idea['title'],
@@ -291,8 +507,7 @@ INSTRUCTIONS:
 
 def clean_for_audio(text: str) -> str:
     """
-    NEW: Removes Markdown formatting for clean audio generation.
-    Handles UTF-8 and ensures plain text output.
+    Removes Markdown formatting for clean audio generation.
     """
     logger.info("Cleaning text for audio by removing Markdown...")
     # Remove markdown headers (e.g., ##, ###) and surrounding whitespace
@@ -310,6 +525,11 @@ def generate_audio(text: str, output_file: str = 'outputs/complete_narration.wav
     """Generate audio narration from clean text."""
     try:
         logger.info("Generating audio narration...")
+        
+        # Send audio generation start notification
+        if telegram_handler:
+            send_telegram_progress(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, "Audio Generation", "Starting audio narration", "Converting text to speech")
+        
         os.makedirs('outputs', exist_ok=True)
 
         pipeline = KPipeline(lang_code='a')
@@ -317,13 +537,19 @@ def generate_audio(text: str, output_file: str = 'outputs/complete_narration.wav
 
         # Split text into manageable chunks by paragraphs
         text_chunks = [chunk for chunk in text.split('\n\n') if chunk.strip()]
-        
+
         total_chunks = len(text_chunks)
         logger.info(f"Splitting text into {total_chunks} chunks for audio processing.")
 
         for i, chunk in enumerate(text_chunks):
             if chunk:
                 logger.info(f"Processing audio for chunk {i+1}/{total_chunks}...")
+                
+                # Send periodic progress updates to Telegram
+                if telegram_handler and i % 10 == 0:  # Every 10 chunks
+                    progress = f"Processing chunk {i+1}/{total_chunks}"
+                    send_telegram_progress(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, "Audio Generation", progress, f"{(i/total_chunks)*100:.1f}% complete")
+                
                 generator = pipeline(chunk, voice='bm_fable')
                 for _, _, audio in generator:
                     if audio is not None and len(audio) > 0:
@@ -334,6 +560,11 @@ def generate_audio(text: str, output_file: str = 'outputs/complete_narration.wav
             sf.write(output_file, combined_audio, 24000)
             duration = len(combined_audio) / 24000
             logger.info(f"Audio saved as '{output_file}' (Duration: {duration:.2f} seconds)")
+            
+            # Send audio completion notification
+            if telegram_handler:
+                send_telegram_progress(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, "Audio Generation", "✅ Audio generation completed!", f"Duration: {duration:.2f} seconds")
+            
             return output_file
         else:
             logger.warning("No audio segments were generated.")
@@ -349,13 +580,13 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
 
     story_prompt = """
-# Shadows of Pta
+# The House on Maple Street
 
-Protagonist: Detective Naledi Mokoena, a fierce, deeply empathetic Black woman in her late 30s assigned to Pretoria’s Missing Persons Unit.
-Antagonist: A calculating predator who uses charm and deception to lure vulnerable women.
-Setting: The divided neighborhoods of greater Pretoria—from well-to-do suburbs to the hidden dangers of tucked-away township streets.
-Crime: A string of abductions and murders targeting young Black women. Each victim was last seen on a seemingly innocent “date” after meeting someone through social media or community connections.
-Signature: The perpetrator leaves no body—once reported missing, victims vanish without a trace. A single, curated item belonging to each woman (a shoe, an earring) is left conspicuously in their bedroom, along with an ominous carved symbol—an ancient spiral, scratched into a mirror or a wall.
+Protagonist: David Parker, a 16-year-old boy who recently moved to Millbrook with his family. He's observant, curious, and struggles to fit in at his new school.
+Antagonist: Ruth and Richard Chandler, a middle-aged couple who appear to be model citizens - she volunteers at church, he coaches little league. They live in the immaculate house next door.
+Setting: Millbrook, a picturesque suburban town where everyone knows everyone, lawns are perfectly manicured, and dark secrets hide behind white picket fences.
+Victim: Meg Loughlin, a 14-year-old girl who lives with the Chandlers as their "niece" after her parents died in a car accident. She's quiet, withdrawn, and always seems afraid.
+Secret: The Chandlers are systematically torturing and abusing Meg, while the entire neighborhood either ignores the signs or actively covers it up to maintain their perfect community image.
 """
 
     try:
@@ -363,13 +594,13 @@ Signature: The perpetrator leaves no body—once reported missing, victims vanis
         story_idea = extract_story_idea_from_prompt(story_prompt)
         logger.info(f"Story idea extracted for title: '{story_idea.get('title', 'N/A')}'")
 
-        generator = KetchumStyleHorrorGenerator()
+        generator = SuburbanHorrorGenerator()
         logger.info("Generating story...")
         final_story = generator.generate_complete_story(story_idea)
 
         if final_story and final_story['word_count'] > 0:
             story_title = final_story['title'].replace(' ', '_')
-            
+
             # Save the original markdown file
             story_file_md = output_dir / f"{story_title}.md"
             with open(story_file_md, 'w', encoding='utf-8') as f:
@@ -378,9 +609,9 @@ Signature: The perpetrator leaves no body—once reported missing, victims vanis
                 f.write(final_story['text'])
             logger.info(f"Story saved to {story_file_md}")
 
-            # FIXED: Clean the text for audio generation
+            # Clean the text for audio generation
             audio_text = clean_for_audio(final_story['text'])
-            
+
             # Save a clean .txt file for verification
             clean_text_file = output_dir / f"{story_title}_Clean.txt"
             with open(clean_text_file, 'w', encoding='utf-8') as f:
@@ -390,6 +621,11 @@ Signature: The perpetrator leaves no body—once reported missing, victims vanis
             # Generate audio from the clean text
             audio_file = output_dir / f"{story_title}_Audiobook.wav"
             generate_audio(audio_text, str(audio_file))
+            
+            # Send final completion message
+            if telegram_handler:
+                send_telegram_progress(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, final_story['title'], "🎉 All tasks completed!", f"Story: {final_story['word_count']} words, Audio generated")
+                
         else:
             logger.error("Story generation failed: empty content returned.")
 
