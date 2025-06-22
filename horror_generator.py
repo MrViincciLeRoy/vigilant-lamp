@@ -271,9 +271,9 @@ CRITICAL INSTRUCTIONS:
             output = self.llm(
                 prompt,
                 max_tokens=int(target_words * 1.5),
-                temperature=0.6,
-                top_p=0.9,
-                repeat_penalty=1.05,
+                temperature=0.5,
+                top_p=0.85,
+                repeat_penalty=1.1,
                 stop=["\n\n\n\n", "---", "## Act", "### Section", "CHAPTER", "THE END"],
                 echo=False
             )
