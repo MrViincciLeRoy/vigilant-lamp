@@ -147,8 +147,9 @@ else:
 try:
     logger.info("Loading Llama model...")
     llm = Llama.from_pretrained(
-        repo_id="DavidAU/L3-Dark-Planet-8B-GGUF",
-        filename="L3-Dark-Planet-8B-D_AU-IQ4_XS.gguf",
+
+        repo_id="DavidAU/L3-Dark-Planet-Horror-City-8B-NEO-Imatrix-GGUF",
+     filename="L3-Dark-Planet-Horror-City-8B-NEO-IMAT-D_AU-IQ2_M-imat.gguf",
         n_ctx=2048,
         n_batch=128,
         n_threads=None,
