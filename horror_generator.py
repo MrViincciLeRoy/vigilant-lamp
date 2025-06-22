@@ -448,20 +448,14 @@ class SuburbanHorrorGenerator:
         return f"{char_context}\n{plot_context}{recent_text}"
 
     def generate_section(self, act_num: int, section_num: int, section_data: Dict[str, str]) -> str:
-        """Generates a single story section with retry logic if word count is insufficient."""
+        """Generates a single story section."""
         if not self.model_loaded:
             return "[Error: Model not loaded]"
-    
+
         title = section_data["title"]
         description = section_data["description"]
         target_words = section_data["target_words"]
-    
-        # Send progress update to Telegram
-        if telegram_handler:
-            story_title = self.current_story_data.get('title', 'Unknown Story')
-            progress_msg = f"Writing Act {act_num}, Section {section_num}: {title}"
-            send_telegram_progress(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, story_title, progress_msg, f"Target: {target_words} words")
-    
+
         horror_style_guide = (
             "WRITING STYLE: Suburban Psychological Horror (like 'The Girl Next Door'):\n"
             "- Focus on the horror hidden beneath suburban normalcy.\n"
@@ -472,61 +466,63 @@ class SuburbanHorrorGenerator:
             "- Use realistic dialogue and believable character motivations.\n"
             "- Show how evil can flourish when good people do nothing."
         )
-    
+
         context = self._build_focused_context()
-    
+
         prompt = f"""
-    You are continuing a psychological horror story in the style of "The Girl Next Door". This must flow seamlessly from the previous section.
-    
-    STORY TITLE: "{self.current_story_data['title']}"
-    {context}
-    
-    CURRENT SECTION: Act {act_num}, Section {section_num} - {title}
-    SECTION GOAL: {description}
-    
-    {horror_style_guide}
-    
-    CRITICAL INSTRUCTIONS:
-    - Write ~{target_words} words that flow DIRECTLY from where the last section ended.
-    - If there was previous text, continue the narrative smoothly - don't restart or summarize.
-    - Maintain the same characters, their personalities, and the established tone.
-    - Keep the same POV and narrative voice throughout.
-    - Advance the plot toward the section goal while maintaining story flow.
-    - NO section headers, titles, or meta-commentary in the story text.
-    - Write as if this is one continuous story, not separate sections.
-    - Begin writing the continuation now:
-    """
-    
+You are continuing a psychological horror story in the style of "The Girl Next Door". This must flow seamlessly from the previous section.
+
+STORY TITLE: "{self.current_story_data['title']}"
+{context}
+
+CURRENT SECTION: Act {act_num}, Section {section_num} - {title}
+SECTION GOAL: {description}
+
+{horror_style_guide}
+
+CRITICAL INSTRUCTIONS:
+- Write ~{target_words} words that flow DIRECTLY from where the last section ended.
+- If there was previous text, continue the narrative smoothly - don't restart or summarize.
+- Maintain the same characters, their personalities, and the established tone.
+- Keep the same POV and narrative voice throughout.
+- Advance the plot toward the section goal while maintaining story flow.
+- NO section headers, titles, or meta-commentary in the story text.
+- Write as if this is one continuous story, not separate sections.
+- Begin writing the continuation now:
+"""
+
         logger.info(f"Generating Act {act_num}, Section {section_num}: '{title}'...")
-        max_attempts = 3
-        for attempt in range(max_attempts):
-            try:
-                output = self.llm(
-                    prompt,
-                    max_tokens=int(target_words * 1.3),  # Slightly more tokens for better completion
-                    temperature=0.5,  # Lower temperature for more consistent narrative
-                    top_p=0.85,  # More focused generation
-                    repeat_penalty=1.1,  # Less aggressive to maintain flow
-                    stop=["\n\n\n\n", "---", "## Act", "### Section", "CHAPTER", "THE END"],
-                    echo=False
-                )
-                section_text = self._clean_text(output['choices'][0]['text'])
-    
-                if self._validate_section(section_text, target_words):
-                    word_count = len(section_text.split())
-                    logger.info(f"  ✓ Act {act_num}, Section {section_num} completed ({word_count} words) after {attempt + 1} attempt(s).")
-                    self.previous_section_text = section_text
-                    summary = f"Act {act_num}-{section_num} ({title}): {description[:100]}..."
-                    self.section_summaries.append(summary)
-                    return section_text
-                else:
-                    word_count = len(section_text.split())
-                    logger.warning(f"  ✗ Attempt {attempt + 1}: Section too short ({word_count} words), retrying...")
-            except Exception as e:
-                logger.error(f"  ✗ Error during attempt {attempt + 1}: {e}")
-    
-        logger.error(f"Failed to generate Act {act_num}, Section {section_num} after {max_attempts} attempts")
-        return f"[Error: Could not generate Act {act_num}, Section {section_num}]"
+        try:
+            output = self.llm(
+                prompt,
+                max_tokens=int(target_words * 1.3),  # Slightly more tokens for better completion
+                temperature=0.5,  # Lower temperature for more consistent narrative
+                top_p=0.85,  # More focused generation
+                repeat_penalty=1.1,  # Less aggressive to maintain flow
+                stop=["\n\n\n\n", "---", "## Act", "### Section", "CHAPTER", "THE END"],
+                echo=False
+            )
+            section_text = self._clean_text(output['choices'][0]['text'])
+
+            if self._validate_section(section_text, target_words):
+                word_count = len(section_text.split())
+                logger.info(f"  ✓ Act {act_num}, Section {section_num} completed ({word_count} words).")
+                
+                # Store this section for continuity in next section
+                self.previous_section_text = section_text
+                
+                # Create more detailed summary for story progression
+                summary = f"Act {act_num}-{section_num} ({title}): {description[:100]}..."
+                self.section_summaries.append(summary)
+                return section_text
+            else:
+                logger.warning(f"  ✗ Act {act_num}, Section {section_num} failed quality check.")
+                return "[Error: Section generation failed]"
+
+        except Exception as e:
+            logger.error(f"  ✗ Error: {e}")
+            return f"[Error: Could not generate Act {act_num}, Section {section_num}]"
+
 
     def _clean_text(self, text: str) -> str:
         """
