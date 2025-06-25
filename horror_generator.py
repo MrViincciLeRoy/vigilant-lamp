@@ -271,7 +271,7 @@ CRITICAL INSTRUCTIONS:
         try:
             output = self.llm(
                 prompt,
-                max_tokens=int(target_words * 1.3),
+                max_tokens=int(target_words * 1.9),
                 temperature=0.6,
                 top_p=0.7,
                 repeat_penalty=1.01,
