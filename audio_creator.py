@@ -128,7 +128,7 @@ def main():
     """
     
     # You can also read text from a file:
-    with open('text/input.txt', 'r', encoding='utf-8') as f:
+    with open('text/starboy.txt', 'r', encoding='utf-8') as f:
          sample_text = f.read()
     
     # Or get text from environment variable:
