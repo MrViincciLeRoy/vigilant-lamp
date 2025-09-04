@@ -1,0 +1,206 @@
+name: Generate Audio from Text
+
+on:
+  # Manual trigger with inputs
+  workflow_dispatch:
+    inputs:
+      input_text:
+        description: 'Text to convert to audio'
+        required: true
+        type: string
+        default: 'Hello world! This is a test of the text-to-speech system.'
+      audio_title:
+        description: 'Title for the audio file'
+        required: false
+        type: string
+        default: 'Generated Audio'
+      voice_selection:
+        description: 'Voice to use for TTS'
+        required: false
+        type: choice
+        options:
+          - 'bm_fable'
+          - 'af_bella'
+          - 'af_sarah'
+          - 'am_adam'
+          - 'am_michael'
+        default: 'bm_fable'
+  
+  # Trigger on push to main branch (if you have input files)
+  push:
+    branches: [ main ]
+    paths:
+      - 'input/*.txt'
+      - 'input/*.md'
+  
+  # Trigger on pull request
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'input/*.txt'
+      - 'input/*.md'
+
+jobs:
+  generate-audio:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+    
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libsndfile1 ffmpeg
+    
+    - name: Install Python dependencies
+      run: |
+        pip install --upgrade pip
+        pip install kokoro soundfile numpy pathlib
+    
+    - name: Create input directory
+      run: mkdir -p input
+    
+    - name: Prepare input text
+      run: |
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          # Use manual input
+          echo "${{ github.event.inputs.input_text }}" > input/text_input.txt
+          echo "AUDIO_TITLE=${{ github.event.inputs.audio_title }}" >> $GITHUB_ENV
+          echo "VOICE_SELECTION=${{ github.event.inputs.voice_selection }}" >> $GITHUB_ENV
+        elif [ -f "input/story.txt" ]; then
+          # Use story.txt if it exists
+          echo "Using input/story.txt"
+          echo "AUDIO_TITLE=Story Audio" >> $GITHUB_ENV
+          echo "VOICE_SELECTION=bm_fable" >> $GITHUB_ENV
+        elif [ -f "input/content.md" ]; then
+          # Use content.md if it exists
+          echo "Using input/content.md"
+          echo "AUDIO_TITLE=Content Audio" >> $GITHUB_ENV
+          echo "VOICE_SELECTION=bm_fable" >> $GITHUB_ENV
+        else
+          # Default text
+          echo "Welcome to the automated audio generation system. This is a default message created because no input file was found." > input/text_input.txt
+          echo "AUDIO_TITLE=Default Audio" >> $GITHUB_ENV
+          echo "VOICE_SELECTION=bm_fable" >> $GITHUB_ENV
+        fi
+    
+    - name: Generate Audio
+      id: audio_generation
+      run: |
+        python audio_creator.py
+        
+        # Get the generated file path
+        AUDIO_FILE=$(find output -name "*.wav" -type f | head -n 1)
+        
+        if [ -n "$AUDIO_FILE" ]; then
+          echo "audio_path=$AUDIO_FILE" >> $GITHUB_OUTPUT
+          echo "✅ Audio file generated: $AUDIO_FILE"
+          
+          # Get file info
+          FILE_SIZE=$(du -h "$AUDIO_FILE" | cut -f1)
+          DURATION=$(soxi -D "$AUDIO_FILE" 2>/dev/null || echo "Unknown")
+          
+          echo "file_size=$FILE_SIZE" >> $GITHUB_OUTPUT
+          echo "duration=$DURATION" >> $GITHUB_OUTPUT
+          
+          echo "📊 File Size: $FILE_SIZE"
+          echo "⏱️ Duration: $DURATION seconds"
+        else
+          echo "❌ No audio file was generated"
+          exit 1
+        fi
+      env:
+        INPUT_TEXT_FILE: input/text_input.txt
+        AUDIO_TITLE: ${{ env.AUDIO_TITLE }}
+        VOICE_SELECTION: ${{ env.VOICE_SELECTION }}
+    
+    - name: Upload Audio Artifact
+      uses: actions/upload-artifact@v4
+      if: success()
+      with:
+        name: generated-audio-${{ github.run_number }}
+        path: |
+          output/*.wav
+          output/*.txt
+        retention-days: 30
+        compression-level: 6
+    
+    - name: Create Release (on main branch push)
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: audio-v${{ github.run_number }}
+        name: Audio Release ${{ github.run_number }}
+        body: |
+          🎵 **Auto-generated Audio Release**
+          
+          **Details:**
+          - File Size: ${{ steps.audio_generation.outputs.file_size }}
+          - Duration: ${{ steps.audio_generation.outputs.duration }} seconds
+          - Generated: ${{ github.event.head_commit.timestamp }}
+          - Voice: ${{ env.VOICE_SELECTION }}
+          
+          **Source:** 
+          Commit: ${{ github.sha }}
+        files: output/*.wav
+        draft: false
+        prerelease: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Comment on PR (for pull requests)
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const audioPath = '${{ steps.audio_generation.outputs.audio_path }}';
+          const fileSize = '${{ steps.audio_generation.outputs.file_size }}';
+          const duration = '${{ steps.audio_generation.outputs.duration }}';
+          
+          const comment = `🎵 **Audio Generated Successfully!**
+          
+          **File Details:**
+          - 📁 Path: \`${audioPath}\`
+          - 📊 Size: ${fileSize}
+          - ⏱️ Duration: ${duration} seconds
+          - 🎭 Voice: ${{ env.VOICE_SELECTION }}
+          
+          The audio file has been generated and is available as a workflow artifact.
+          You can download it from the [Actions tab](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}).`;
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: comment
+          });
+    
+    - name: Summary
+      if: always()
+      run: |
+        echo "## 🎵 Audio Generation Summary" >> $GITHUB_STEP_SUMMARY
+        echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+        echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Status | ${{ job.status == 'success' && '✅ Success' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Audio Title | ${{ env.AUDIO_TITLE }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Voice | ${{ env.VOICE_SELECTION }} |" >> $GITHUB_STEP_SUMMARY
+        
+        if [ "${{ job.status }}" = "success" ]; then
+          echo "| File Size | ${{ steps.audio_generation.outputs.file_size }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Duration | ${{ steps.audio_generation.outputs.duration }} seconds |" >> $GITHUB_STEP_SUMMARY
+          echo "| Artifact | generated-audio-${{ github.run_number }} |" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📥 How to Download" >> $GITHUB_STEP_SUMMARY
+        echo "1. Go to the [Actions tab](https://github.com/${{ github.repository }}/actions)" >> $GITHUB_STEP_SUMMARY
+        echo "2. Click on this workflow run" >> $GITHUB_STEP_SUMMARY
+        echo "3. Scroll down to 'Artifacts'" >> $GITHUB_STEP_SUMMARY
+        echo "4. Download the 'generated-audio-${{ github.run_number }}' artifact" >> $GITHUB_STEP_SUMMARY
