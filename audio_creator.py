@@ -116,7 +116,7 @@ def main():
     """Main function to run the audio creator."""
     
     # Example usage - you can modify this section
-    sample_text = """
+    """sample_text = 
     Welcome to this audio demonstration. This is a simple text-to-speech conversion
     using the Kokoro TTS engine. 
     
